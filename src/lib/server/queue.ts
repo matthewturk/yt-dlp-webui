@@ -96,8 +96,14 @@ class QueueManager {
             t.status === "failed" ||
             t.status === "skipped"
         )
-        .slice(-10),
+        .slice(-20),
     };
+  }
+
+  clearCompleted() {
+    this.queue = this.queue.filter(
+      (t) => t.status === "queued" || t.status === "downloading"
+    );
   }
 
   private async processQueue() {

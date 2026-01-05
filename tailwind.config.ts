@@ -19,7 +19,7 @@ export default {
       themes: {
         preset: [
           {
-            name: "skeleton",
+            name: "modern",
             enhancements: true,
           },
         ],

@@ -27,6 +27,7 @@
     },
     "type": "module",
     "dependencies": {
+        "lucide-svelte": "^0.562.0",
         "zod": "^3.22.4"
     }
 }
