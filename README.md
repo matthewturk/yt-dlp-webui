@@ -22,7 +22,7 @@ A simple web interface for `yt-dlp` built with SvelteKit and Skeleton UI.
 1. Navigate to the application directory:
 
    ```bash
-   cd yt-dlp-webui
+   cd yt_dlp_webui
    ```
 
 2. Install dependencies:
@@ -65,7 +65,7 @@ This project is designed to integrate deeply with Home Assistant.
 
 ### 1. Home Assistant Add-on
 
-The `yt-dlp-webui/` directory contains the configuration for running this app as a Home Assistant Add-on.
+The `yt_dlp_webui/` directory contains the configuration for running this app as a Home Assistant Add-on.
 
 **Installation:**
 
@@ -92,8 +92,8 @@ When adding the repository URL in Home Assistant, use the following format:
 #### Option B: Local Add-on Installation
 
 1. Enable the **Samba share** or **SSH** add-on in Home Assistant to access your HA file system.
-2. Create a folder named `addons/yt-dlp-webui` in your Home Assistant configuration directory.
-3. Copy the contents of the `yt-dlp-webui/` folder into that directory.
+2. Create a folder named `addons/yt_dlp_webui` in your Home Assistant configuration directory.
+3. Copy the contents of the `yt_dlp_webui/` folder into that directory.
 4. Go to the Add-on Store and click **Check for updates** (top right menu).
 5. The add-on will appear under a new "Local" section.
 
