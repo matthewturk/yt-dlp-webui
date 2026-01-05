@@ -14,11 +14,20 @@ export async function GET() {
     }
 
     const content = fs.readFileSync(configPath, "utf-8");
-    if (!content.trim()) {
+    if (!content || !content.trim()) {
       return json({ locations: ["Default (local)"] });
     }
 
-    const config = JSON.parse(content);
+    let config;
+    try {
+      config = JSON.parse(content);
+    } catch (parseError) {
+      console.error("Failed to parse config JSON:", parseError);
+      return json({
+        locations: ["Default (local)"],
+        error: "Invalid config file",
+      });
+    }
 
     // Only return names to the frontend
     const locations = (config.allowed_locations || []).map(

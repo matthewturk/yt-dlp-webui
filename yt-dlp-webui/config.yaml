@@ -1,6 +1,6 @@
 name: "yt-dlp WebUI"
 description: "A simple web interface for yt-dlp"
-version: "1.0.8"
+version: "1.0.9"
 slug: "yt-dlp-webui"
 arch:
   - aarch64
@@ -19,7 +19,7 @@ map:
   - share:rw
 options:
   yt_dlp_path: "yt-dlp"
-  history_path: "/share/downloads/history.json"
+  history_path: "/data/history.json"
   allowed_locations:
     - name: "Downloads"
       path: "/share/downloads"
