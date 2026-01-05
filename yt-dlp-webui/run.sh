@@ -1,16 +1,14 @@
-#!/usr/bin/env bash
-set -e
+#!/usr/bin/with-contenv bashio
 
 # Read options from HA and write to the app's config.json
-YT_DLP_PATH=$(bashio config 'yt_dlp_path')
-HISTORY_PATH=$(bashio config 'history_path')
-ALLOWED_LOCATIONS=$(bashio config 'allowed_locations')
-EXTRA_ARGS=$(bashio config 'extra_args')
-AUTO_UPDATE=$(bashio config 'auto_update')
+YT_DLP_PATH=$(bashio::config 'yt_dlp_path')
+HISTORY_PATH=$(bashio::config 'history_path')
+ALLOWED_LOCATIONS=$(bashio::config 'allowed_locations')
+EXTRA_ARGS=$(bashio::config 'extra_args')
 
-if [ "$(bashio config 'auto_update')" = "true" ]; then
-    bashio log.info "Checking for yt-dlp updates..."
-    pip install --no-cache-dir --break-system-packages -U yt-dlp || bashio log.warning "Failed to update yt-dlp"
+if bashio::config.true 'auto_update'; then
+    bashio::log.info "Checking for yt-dlp updates..."
+    pip install --no-cache-dir --break-system-packages -U yt-dlp || bashio::log.warning "Failed to update yt-dlp"
 fi
 
 # Construct the config.json using jq for safety
