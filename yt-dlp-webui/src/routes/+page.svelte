@@ -47,7 +47,7 @@
 
   onMount(async () => {
     try {
-      const response = await fetch("/api/config");
+      const response = await fetch("api/config");
       const data = await response.json();
       if (data.locations) {
         locations = data.locations;
@@ -67,7 +67,7 @@
 
   async function fetchQueue() {
     try {
-      const response = await fetch("/api/queue");
+      const response = await fetch("api/queue");
       queue = await response.json();
     } catch (e) {
       console.error("Failed to fetch queue", e);
@@ -90,7 +90,7 @@
     }
 
     try {
-      const response = await fetch("/api/download", {
+      const response = await fetch("api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -132,7 +132,7 @@
 
   async function clearHistory() {
     try {
-      await fetch("/api/queue/clear", { method: "POST" });
+      await fetch("api/queue/clear", { method: "POST" });
       fetchQueue();
       const t: ToastSettings = {
         message: "History cleared",
