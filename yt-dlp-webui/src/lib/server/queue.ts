@@ -167,10 +167,7 @@ class QueueManager {
       if (config.extra_args) {
         if (Array.isArray(config.extra_args)) {
           args.push(...config.extra_args);
-        } else if (
-          typeof config.extra_args === "string" &&
-          config.extra_args.trim() !== ""
-        ) {
+        } else if (typeof config.extra_args === "string" && config.extra_args.trim() !== "") {
           // Split by space but respect quotes? For now, simple split.
           args.push(...config.extra_args.split(/\s+/));
         }

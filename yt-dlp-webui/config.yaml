@@ -1,7 +1,7 @@
-name: yt-dlp WebUI
-description: A simple web interface for yt-dlp
+name: "yt-dlp WebUI"
+description: "A simple web interface for yt-dlp"
 version: "1.0.0"
-slug: yt_dlp_webui
+slug: "yt-dlp-webui"
 arch:
   - aarch64
   - amd64
@@ -12,14 +12,16 @@ startup: application
 boot: auto
 ingress: true
 ingress_port: 3000
+panel: true
+panel_icon: "mdi:download"
 map:
   - share:rw
 options:
-  yt_dlp_path: yt-dlp
-  history_path: /share/downloads/history.json
+  yt_dlp_path: "yt-dlp"
+  history_path: "/share/downloads/history.json"
   allowed_locations:
-    - name: Downloads
-      path: /share/downloads
+    - name: "Downloads"
+      path: "/share/downloads"
   extra_args: ""
   auto_update: true
 schema:

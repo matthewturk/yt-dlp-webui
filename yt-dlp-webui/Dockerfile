@@ -19,7 +19,7 @@ COPY . .
 RUN npm install && npm run build
 
 # Environment variables for adapter-node
-ENV PORT=5173
+ENV PORT=3000
 ENV HOST=0.0.0.0
 
 # Entrypoint script
