@@ -1,0 +1,8 @@
+node_modules
+.svelte-kit
+build
+.git
+.vscode
+downloads
+history.json
+webui_config.json
