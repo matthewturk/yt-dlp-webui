@@ -9,15 +9,22 @@ arch:
   - armv7
 init: false
 options:
-  yt_dlp_path: "/usr/local/bin/yt-dlp"
+  yt_dlp_path: "yt-dlp"
+  history_path: "/data/history.json"
   allowed_locations:
     - name: "Downloads"
       path: "/share/downloads"
+  extra_args: []
+  auto_update: true
 schema:
   yt_dlp_path: str
+  history_path: str
   allowed_locations:
     - name: str
       path: str
+  extra_args:
+    - str
+  auto_update: bool
 ingress: true
 ingress_port: 5173
 panel_icon: "mdi:download"

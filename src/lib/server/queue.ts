@@ -20,17 +20,36 @@ export interface HistoryEntry {
 class QueueManager {
   private queue: DownloadTask[] = [];
   private activeTask: DownloadTask | null = null;
-  private historyPath = path.resolve("history.json");
+  private config: any = null;
 
   constructor() {
-    if (!fs.existsSync(this.historyPath)) {
-      fs.writeFileSync(this.historyPath, JSON.stringify([]));
+    this.loadConfig();
+    if (!fs.existsSync(this.getHistoryPath())) {
+      fs.writeFileSync(this.getHistoryPath(), JSON.stringify([]));
     }
+  }
+
+  private loadConfig() {
+    const configPath = path.resolve("config.json");
+    if (fs.existsSync(configPath)) {
+      this.config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    } else {
+      this.config = {
+        yt_dlp_path: "yt-dlp",
+        allowed_locations: [{ name: "Default", path: "downloads" }],
+        history_path: "history.json",
+        extra_args: [],
+      };
+    }
+  }
+
+  private getHistoryPath() {
+    return path.resolve(this.config.history_path || "history.json");
   }
 
   private getHistory(): HistoryEntry[] {
     try {
-      return JSON.parse(fs.readFileSync(this.historyPath, "utf-8"));
+      return JSON.parse(fs.readFileSync(this.getHistoryPath(), "utf-8"));
     } catch (e) {
       return [];
     }
@@ -43,7 +62,7 @@ class QueueManager {
       format,
       timestamp: new Date().toISOString(),
     });
-    fs.writeFileSync(this.historyPath, JSON.stringify(history, null, 2));
+    fs.writeFileSync(this.getHistoryPath(), JSON.stringify(history, null, 2));
   }
 
   private isAlreadyDownloaded(url: string, format: string): boolean {
@@ -83,6 +102,8 @@ class QueueManager {
 
   private async processQueue() {
     if (this.activeTask || this.queue.length === 0) return;
+
+    this.loadConfig(); // Refresh config
 
     const task = this.queue.find((t) => t.status === "queued");
     if (!task) return;
@@ -125,8 +146,8 @@ class QueueManager {
 
   private runDownload(task: DownloadTask): Promise<void> {
     return new Promise((resolve, reject) => {
-      const configPath = path.resolve("config.json");
-      const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      this.loadConfig(); // Refresh config in case it changed
+      const config = this.config;
 
       const selectedLocation = task.options.locationName
         ? config.allowed_locations.find(
@@ -136,6 +157,10 @@ class QueueManager {
 
       const outputDir = selectedLocation.path;
       const args = [task.url, "--write-info-json", "--newline"];
+
+      if (config.extra_args && Array.isArray(config.extra_args)) {
+        args.push(...config.extra_args);
+      }
 
       if (task.options.audioOnly) {
         args.push("--extract-audio");

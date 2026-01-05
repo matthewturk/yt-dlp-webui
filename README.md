@@ -65,7 +65,12 @@ The `hassio/` directory contains the configuration for running this app as a Hom
 
 1. Add this repository URL to your Home Assistant Add-on Store (Supervisor -> Add-on Store -> Three dots -> Repositories).
 2. Search for "yt-dlp WebUI" and click Install.
-3. Configure your `allowed_locations` in the Add-on configuration tab.
+3. Configure your `allowed_locations` and other settings in the Add-on configuration tab.
+   - **yt_dlp_path**: Path to the executable (default: `yt-dlp`).
+   - **history_path**: Where to store download history (default: `/data/history.json`).
+   - **allowed_locations**: List of names and paths for downloads.
+   - **extra_args**: List of additional command-line arguments for `yt-dlp`.
+   - **auto_update**: Boolean to automatically update `yt-dlp` to the latest version on every add-on startup (default: `true`).
 4. Start the add-on.
 5. Use the "Open Web UI" button to access the interface via Ingress.
 
