@@ -25,10 +25,10 @@ options:
   extra_args: ""
   auto_update: true
 schema:
-  yt_dlp_path: string
-  history_path: string
+  yt_dlp_path: str
+  history_path: str
   allowed_locations:
-    - name: string
-      path: string
-  extra_args: string
-  auto_update: boolean
+    - name: str
+      path: str
+  extra_args: str
+  auto_update: bool
