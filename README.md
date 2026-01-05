@@ -53,19 +53,82 @@ Example `config.json`:
 }
 ```
 
-## Home Assistant Integration
+## Home Assistant Support
 
-To control the WebUI from Home Assistant:
+This project is designed to integrate deeply with Home Assistant.
 
-1. Copy the `custom_components/yt_dlp_webui` folder to your HA `config/custom_components/` directory.
+### 1. Home Assistant Add-on
+
+The `hassio/` directory contains the configuration for running this app as a Home Assistant Add-on.
+
+**Installation:**
+
+1. Add this repository URL to your Home Assistant Add-on Store (Supervisor -> Add-on Store -> Three dots -> Repositories).
+2. Search for "yt-dlp WebUI" and click Install.
+3. Configure your `allowed_locations` in the Add-on configuration tab.
+4. Start the add-on.
+5. Use the "Open Web UI" button to access the interface via Ingress.
+
+### Handling Private Repositories
+
+If your GitHub repository is private, Home Assistant cannot access it via the standard "Add Repository" method without authentication. You have two options:
+
+#### Option A: Use a Personal Access Token (PAT)
+
+When adding the repository URL in Home Assistant, use the following format:
+`https://YOUR_GITHUB_USERNAME:YOUR_PERSONAL_ACCESS_TOKEN@github.com/YOUR_USERNAME/yt-dlp-webui`
+
+#### Option B: Local Add-on Installation
+
+1. Enable the **Samba share** or **SSH** add-on in Home Assistant to access your HA file system.
+2. Create a folder named `addons/yt-dlp-webui` in your Home Assistant configuration directory.
+3. Copy the contents of this repository (specifically the `hassio/` folder and the root app files) into that directory.
+4. Go to the Add-on Store and click **Check for updates** (top right menu).
+5. The add-on will appear under a new "Local" section.
+
+### 2. Home Assistant Integration (Custom Component)
+
+The `custom_components/yt_dlp_webui` folder provides a native integration for Home Assistant.
+
+**Installation:**
+
+1. Copy the `custom_components/yt_dlp_webui` folder to your Home Assistant `config/custom_components/` directory.
 2. Add the following to your `configuration.yaml`:
    ```yaml
    yt_dlp_webui:
-     host: "YOUR_ADDON_IP_OR_HOSTNAME"
+     host: "localhost" # Use the IP of your HA instance if running as an add-on
      port: 5173
    ```
 3. Restart Home Assistant.
-4. Use the `yt_dlp_webui.download` service in your automations!
+
+**Exposed Entities:**
+
+- `sensor.yt_dlp_active_downloads`: Number of currently downloading tasks.
+- `sensor.yt_dlp_queued_downloads`: Number of tasks waiting in the queue.
+
+**Services:**
+
+- `yt_dlp_webui.download`: Queue a new download.
+  - `url` (Required): The video or playlist URL.
+  - `location` (Optional): The name of the location (e.g., "Movies").
+  - `audio_only` (Optional): Boolean to extract audio only.
+  - `force` (Optional): Boolean to force re-download even if in history.
+
+**Example Automation:**
+
+```yaml
+alias: "Download YouTube Video from Notification"
+trigger:
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: "DOWNLOAD_VIDEO"
+action:
+  - service: yt_dlp_webui.download
+    data:
+      url: "{{ trigger.event.data.url }}"
+      location: "Default"
+```
 
 ## Security
 
