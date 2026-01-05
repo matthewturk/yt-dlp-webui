@@ -1,6 +1,6 @@
 name: "yt-dlp WebUI"
 description: "A simple web interface for yt-dlp"
-version: "1.0.1"
+version: "1.0.2"
 slug: "yt-dlp-webui"
 arch:
   - aarch64
@@ -8,7 +8,7 @@ arch:
   - armhf
   - armv7
   - i386
-init: true
+init: false
 startup: application
 boot: auto
 ingress: true
