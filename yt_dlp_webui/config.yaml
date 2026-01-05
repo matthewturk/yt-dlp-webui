@@ -2,6 +2,11 @@ name: "yt-dlp WebUI"
 description: "A simple web interface for yt-dlp"
 version: "1.0.0"
 slug: "yt_dlp_webui"
+boot: auto
+startup: application
+panel: true
+map:
+  - share:rw
 arch:
   - aarch64
   - amd64
