@@ -23,7 +23,7 @@ ENV PORT=5173
 ENV HOST=0.0.0.0
 
 # Entrypoint script
-COPY hassio/run.sh /
+COPY run.sh /
 RUN chmod a+x /run.sh
 
 CMD [ "/run.sh" ]

@@ -1,0 +1,17 @@
+{
+    "yt_dlp_path": "/home/mturk/.local/bin/yt-dlp",
+    "allowed_locations": [
+        {
+            "name": "Default",
+            "path": "/home/mturk/dev/yt-dlp-webui/downloads"
+        },
+        {
+            "name": "Movies",
+            "path": "/home/mturk/dev/yt-dlp-webui/downloads/movies"
+        },
+        {
+            "name": "Music",
+            "path": "/home/mturk/dev/yt-dlp-webui/downloads/music"
+        }
+    ]
+}
