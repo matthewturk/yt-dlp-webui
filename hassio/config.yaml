@@ -1,0 +1,23 @@
+name: "yt-dlp WebUI"
+description: "A simple web interface for yt-dlp"
+version: "1.0.0"
+slug: "yt_dlp_webui"
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+init: false
+options:
+  yt_dlp_path: "/usr/local/bin/yt-dlp"
+  allowed_locations:
+    - name: "Downloads"
+      path: "/share/downloads"
+schema:
+  yt_dlp_path: str
+  allowed_locations:
+    - name: str
+      path: str
+ingress: true
+ingress_port: 5173
+panel_icon: "mdi:download"

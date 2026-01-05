@@ -3,11 +3,12 @@
     Accordion,
     AccordionItem,
     getToastStore,
+    ProgressBar,
   } from "@skeletonlabs/skeleton";
   import type { ToastSettings } from "@skeletonlabs/skeleton";
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
 
-  let url = "";
+  let urlInput = "";
   let format = "";
   let filename = "";
   let locationName = "";
@@ -17,10 +18,13 @@
   let maxResolution = "";
   let embedMetadata = true;
   let embedThumbnail = true;
+  let force = false;
   let locations: string[] = [];
   let loading = false;
-  let result = "";
   let error = "";
+
+  let queue: any = { active: null, pending: [], completed: [] };
+  let pollInterval: any;
 
   onMount(async () => {
     try {
@@ -33,19 +37,45 @@
     } catch (e) {
       console.error("Failed to load locations", e);
     }
+
+    fetchQueue();
+    pollInterval = setInterval(fetchQueue, 2000);
   });
+
+  onDestroy(() => {
+    if (pollInterval) clearInterval(pollInterval);
+  });
+
+  async function fetchQueue() {
+    try {
+      const response = await fetch("/api/queue");
+      queue = await response.json();
+    } catch (e) {
+      console.error("Failed to fetch queue", e);
+    }
+  }
 
   async function handleDownload() {
     loading = true;
-    result = "";
     error = "";
+
+    const urls = urlInput
+      .split("\n")
+      .map((u) => u.trim())
+      .filter((u) => u.length > 0);
+
+    if (urls.length === 0) {
+      error = "Please enter at least one URL";
+      loading = false;
+      return;
+    }
 
     try {
       const response = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url,
+          urls,
           options: {
             format,
             filename,
@@ -56,6 +86,7 @@
             maxResolution,
             embedMetadata,
             embedThumbnail,
+            force,
             advanced: true,
           },
         }),
@@ -63,7 +94,8 @@
 
       const data = await response.json();
       if (response.ok) {
-        result = data.stdout || "Success!";
+        urlInput = "";
+        fetchQueue();
       } else {
         error = data.error || "Something went wrong";
       }
@@ -75,27 +107,33 @@
   }
 </script>
 
-<div class="container h-full mx-auto flex justify-center items-center">
-  <div class="space-y-8 w-full max-w-2xl p-4">
-    <header class="text-center">
-      <h1 class="h1">yt-dlp Web Interface</h1>
-      <p>Enter a URL to download video or audio.</p>
-    </header>
+<div class="container h-full mx-auto p-4 space-y-8">
+  <header class="text-center">
+    <h1 class="h1">yt-dlp Web Interface</h1>
+    <p>Enter one or more URLs (one per line) to download.</p>
+  </header>
 
-    <div class="card p-4 space-y-4 shadow-xl">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- Input Section -->
+    <div class="card p-4 space-y-4 shadow-xl h-fit">
       <label class="label">
-        <span>Video URL</span>
-        <input
-          class="input"
-          type="url"
-          bind:value={url}
+        <span>Video URLs (one per line)</span>
+        <textarea
+          class="textarea"
+          rows="4"
+          bind:value={urlInput}
           placeholder="https://www.youtube.com/watch?v=..."
-        />
+        ></textarea>
       </label>
 
       <label class="flex items-center space-x-2">
         <input class="checkbox" type="checkbox" bind:checked={isPlaylist} />
         <p>Download as Playlist</p>
+      </label>
+
+      <label class="flex items-center space-x-2">
+        <input class="checkbox" type="checkbox" bind:checked={force} />
+        <p>Force re-download (ignore history)</p>
       </label>
 
       {#if locations.length > 0}
@@ -209,26 +247,75 @@
       <button
         class="btn variant-filled-primary w-full"
         on:click={handleDownload}
-        disabled={loading || !url}
+        disabled={loading || !urlInput}
       >
         {#if loading}
-          <span>Downloading...</span>
+          <span>Adding to Queue...</span>
         {:else}
-          <span>Download</span>
+          <span>Add to Queue</span>
         {/if}
       </button>
+
+      {#if error}
+        <div class="card p-4 variant-soft-error">
+          <p>{error}</p>
+        </div>
+      {/if}
     </div>
 
-    {#if result}
-      <div class="card p-4 variant-soft-success overflow-auto max-h-64">
-        <pre class="text-xs">{result}</pre>
-      </div>
-    {/if}
+    <!-- Queue Section -->
+    <div class="space-y-4">
+      <h2 class="h2">Download Queue</h2>
 
-    {#if error}
-      <div class="card p-4 variant-soft-error">
-        <p>{error}</p>
-      </div>
-    {/if}
+      {#if queue.active}
+        <div class="card p-4 variant-soft-primary space-y-2">
+          <div class="flex justify-between items-center">
+            <span class="font-bold">Active: {queue.active.url}</span>
+            <span>{queue.active.progress}</span>
+          </div>
+          <ProgressBar value={parseFloat(queue.active.progress)} max={100}
+          ></ProgressBar>
+        </div>
+      {/if}
+
+      {#if queue.pending.length > 0}
+        <div class="card p-4 space-y-2">
+          <h3 class="h3">Pending ({queue.pending.length})</h3>
+          <ul class="list">
+            {#each queue.pending as task}
+              <li class="text-sm truncate opacity-75">{task.url}</li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
+
+      {#if queue.completed.length > 0}
+        <div class="card p-4 space-y-2">
+          <h3 class="h3">Recent Activity</h3>
+          <ul class="list">
+            {#each queue.completed as task}
+              <li class="flex justify-between items-center text-sm">
+                <span class="truncate flex-1">{task.url}</span>
+                <span
+                  class="badge {task.status === 'completed'
+                    ? 'variant-filled-success'
+                    : task.status === 'skipped'
+                      ? 'variant-filled-warning'
+                      : 'variant-filled-error'}"
+                >
+                  {task.status}
+                </span>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
+
+      {#if !queue.active && queue.pending.length === 0 && queue.completed.length === 0}
+        <div class="card p-8 text-center opacity-50">
+          <p>Queue is empty</p>
+        </div>
+      {/if}
+    </div>
   </div>
 </div>

@@ -1,0 +1,19 @@
+download:
+  description: "Queue a video or playlist for download via yt-dlp WebUI."
+  fields:
+    url:
+      description: "The URL of the video or playlist to download."
+      example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+      required: true
+    location:
+      description: "The name of the download location (as defined in config.json)."
+      example: "Movies"
+      required: false
+    audio_only:
+      description: "Whether to extract audio only."
+      example: true
+      default: false
+    force:
+      description: "Whether to force re-download even if already in history."
+      example: true
+      default: false

@@ -4,13 +4,16 @@ A simple web interface for `yt-dlp` built with SvelteKit and Skeleton UI.
 
 ## Features
 
-- Simple URL-based downloads.
+- **Batch Downloads**: Queue up multiple URLs at once (one per line).
+- **Download Queue**: Real-time progress tracking and status for active, pending, and completed tasks.
 - **Playlist Support**: Toggle playlist downloads with automatic subfolder organization.
 - **Audio Extraction**: Download audio-only in MP3, M4A, Opus, or WAV formats.
 - **Quality Control**: Limit maximum resolution (e.g., 1080p, 720p).
 - **Metadata & Thumbnails**: Embed metadata and thumbnails directly into files.
 - **Sidecar Metadata**: Automatically downloads full metadata to a `.info.json` sidecar file by default.
-- Advanced options for format selection and custom naming.
+- **Home Assistant Add-on**: Ready to be used as a Home Assistant add-on with Ingress support.
+- **Home Assistant Integration**: Includes a custom component to trigger downloads from HA automations and monitor the queue.
+- **API Access**: Exposes `/api/download` for adding tasks and `/api/queue` for monitoring.
 - Restricted output locations defined in `config.json`.
 - API endpoint for programmatic access.
 
@@ -49,6 +52,20 @@ Example `config.json`:
   ]
 }
 ```
+
+## Home Assistant Integration
+
+To control the WebUI from Home Assistant:
+
+1. Copy the `custom_components/yt_dlp_webui` folder to your HA `config/custom_components/` directory.
+2. Add the following to your `configuration.yaml`:
+   ```yaml
+   yt_dlp_webui:
+     host: "YOUR_ADDON_IP_OR_HOSTNAME"
+     port: 5173
+   ```
+3. Restart Home Assistant.
+4. Use the `yt_dlp_webui.download` service in your automations!
 
 ## Security
 

@@ -1,0 +1,11 @@
+{
+    "domain": "yt_dlp_webui",
+    "name": "yt-dlp WebUI",
+    "documentation": "https://github.com/matthewturk/yt-dlp-webui",
+    "dependencies": [],
+    "codeowners": [
+        "@matthewturk"
+    ],
+    "iot_class": "local_polling",
+    "version": "1.0.0"
+}
