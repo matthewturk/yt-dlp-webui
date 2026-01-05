@@ -5,6 +5,11 @@ A simple web interface for `yt-dlp` built with SvelteKit and Skeleton UI.
 ## Features
 
 - Simple URL-based downloads.
+- **Playlist Support**: Toggle playlist downloads with automatic subfolder organization.
+- **Audio Extraction**: Download audio-only in MP3, M4A, Opus, or WAV formats.
+- **Quality Control**: Limit maximum resolution (e.g., 1080p, 720p).
+- **Metadata & Thumbnails**: Embed metadata and thumbnails directly into files.
+- **Sidecar Metadata**: Automatically downloads full metadata to a `.info.json` sidecar file by default.
 - Advanced options for format selection and custom naming.
 - Restricted output locations defined in `config.json`.
 - API endpoint for programmatic access.

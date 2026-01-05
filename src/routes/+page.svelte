@@ -11,6 +11,12 @@
   let format = "";
   let filename = "";
   let locationName = "";
+  let isPlaylist = false;
+  let audioOnly = false;
+  let audioFormat = "mp3";
+  let maxResolution = "";
+  let embedMetadata = true;
+  let embedThumbnail = true;
   let locations: string[] = [];
   let loading = false;
   let result = "";
@@ -44,6 +50,12 @@
             format,
             filename,
             locationName,
+            isPlaylist,
+            audioOnly,
+            audioFormat,
+            maxResolution,
+            embedMetadata,
+            embedThumbnail,
             advanced: true,
           },
         }),
@@ -81,6 +93,11 @@
         />
       </label>
 
+      <label class="flex items-center space-x-2">
+        <input class="checkbox" type="checkbox" bind:checked={isPlaylist} />
+        <p>Download as Playlist</p>
+      </label>
+
       {#if locations.length > 0}
         <label class="label">
           <span>Download Location</span>
@@ -97,6 +114,63 @@
           <svelte:fragment slot="summary">Advanced Options</svelte:fragment>
           <svelte:fragment slot="content">
             <div class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label class="flex items-center space-x-2">
+                  <input
+                    class="checkbox"
+                    type="checkbox"
+                    bind:checked={audioOnly}
+                  />
+                  <p>Audio Only</p>
+                </label>
+                {#if audioOnly}
+                  <label class="label">
+                    <span>Audio Format</span>
+                    <select class="select" bind:value={audioFormat}>
+                      <option value="mp3">MP3</option>
+                      <option value="m4a">M4A</option>
+                      <option value="opus">Opus</option>
+                      <option value="wav">WAV</option>
+                    </select>
+                  </label>
+                {/if}
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label class="flex items-center space-x-2">
+                  <input
+                    class="checkbox"
+                    type="checkbox"
+                    bind:checked={embedMetadata}
+                  />
+                  <p>Embed Metadata</p>
+                </label>
+                <label class="flex items-center space-x-2">
+                  <input
+                    class="checkbox"
+                    type="checkbox"
+                    bind:checked={embedThumbnail}
+                  />
+                  <p>Embed Thumbnail</p>
+                </label>
+              </div>
+
+              <label class="label">
+                <span>Max Resolution</span>
+                <select
+                  class="select"
+                  bind:value={maxResolution}
+                  disabled={audioOnly}
+                >
+                  <option value="">Best Available</option>
+                  <option value="2160">4K (2160p)</option>
+                  <option value="1440">2K (1440p)</option>
+                  <option value="1080">1080p</option>
+                  <option value="720">720p</option>
+                  <option value="480">480p</option>
+                </select>
+              </label>
+
               <label class="label">
                 <span>Format Selection</span>
                 <select class="select" bind:value={format}>

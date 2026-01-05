@@ -10,6 +10,12 @@ const DownloadSchema = z.object({
     format: z.string().optional(),
     filename: z.string().optional(),
     locationName: z.string().optional(),
+    isPlaylist: z.boolean().optional(),
+    audioOnly: z.boolean().optional(),
+    audioFormat: z.string().optional(),
+    maxResolution: z.string().optional(),
+    embedMetadata: z.boolean().optional(),
+    embedThumbnail: z.boolean().optional(),
     advanced: z.boolean().optional(),
   }),
 });
@@ -58,14 +64,55 @@ export async function POST({ request }) {
   // Build yt-dlp arguments
   const args = [url];
 
-  if (options.format) {
+  // Default: write sidecar metadata
+  args.push("--write-info-json");
+
+  if (options.audioOnly) {
+    args.push("--extract-audio");
+    if (options.audioFormat) {
+      args.push("--audio-format", options.audioFormat);
+    }
+  }
+
+  if (options.maxResolution && !options.audioOnly) {
+    // Example: bestvideo[height<=?1080]+bestaudio/best
+    args.push(
+      "-f",
+      `bestvideo[height<=?${options.maxResolution}]+bestaudio/best`
+    );
+  } else if (options.format) {
     args.push("-f", options.format);
   }
 
-  if (options.filename) {
-    args.push("-o", path.join(outputDir, options.filename));
+  if (options.embedMetadata) {
+    args.push("--embed-metadata");
+  }
+
+  if (options.embedThumbnail) {
+    args.push("--embed-thumbnail");
+  }
+
+  if (options.isPlaylist) {
+    args.push("--yes-playlist");
+    if (options.filename) {
+      args.push("-o", path.join(outputDir, options.filename));
+    } else {
+      // Better template for playlists: PlaylistTitle/Index - VideoTitle.ext
+      args.push(
+        "-o",
+        path.join(
+          outputDir,
+          "%(playlist_title)s/%(playlist_index)s - %(title)s.%(ext)s"
+        )
+      );
+    }
   } else {
-    args.push("-o", path.join(outputDir, "%(title)s.%(ext)s"));
+    args.push("--no-playlist");
+    if (options.filename) {
+      args.push("-o", path.join(outputDir, options.filename));
+    } else {
+      args.push("-o", path.join(outputDir, "%(title)s.%(ext)s"));
+    }
   }
 
   if (options.advanced) {
