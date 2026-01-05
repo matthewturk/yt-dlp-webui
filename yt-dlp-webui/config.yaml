@@ -1,6 +1,6 @@
 name: "yt-dlp WebUI"
 description: "A simple web interface for yt-dlp"
-version: "1.0.7"
+version: "1.0.8"
 slug: "yt-dlp-webui"
 arch:
   - aarch64
