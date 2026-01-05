@@ -8,6 +8,7 @@ arch:
   - armhf
   - armv7
   - i386
+init: true
 startup: application
 boot: auto
 ingress: true

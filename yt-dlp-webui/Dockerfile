@@ -26,4 +26,5 @@ ENV HOST=0.0.0.0
 COPY run.sh /
 RUN chmod a+x /run.sh
 
+ENTRYPOINT ["/init"]
 CMD [ "/run.sh" ]
