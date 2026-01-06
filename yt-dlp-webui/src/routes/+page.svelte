@@ -209,7 +209,7 @@
             <span>Video URLs (one per line)</span>
           </span>
           <textarea
-            class="textarea bg-surface-50-940-token border-surface-500/20 focus:border-primary-500 transition-colors"
+            class="textarea bg-surface-50-900-token border-surface-500/20 focus:border-primary-500 transition-colors"
             rows="5"
             bind:value={urlInput}
             placeholder="https://www.youtube.com/watch?v=..."
@@ -222,7 +222,7 @@
           >
             <input
               type="checkbox"
-              class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-primary-500 focus:ring-primary-500"
+              class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-primary-500 focus:ring-primary-500"
               bind:checked={isPlaylist}
             />
             <span class="text-sm font-medium">Playlist</span>
@@ -232,7 +232,7 @@
           >
             <input
               type="checkbox"
-              class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-warning-500 focus:ring-warning-500"
+              class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-warning-500 focus:ring-warning-500"
               bind:checked={force}
             />
             <span class="text-sm font-medium">Force Redownload</span>
@@ -244,7 +244,7 @@
           >
             <input
               type="checkbox"
-              class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-secondary-500 focus:ring-secondary-500"
+              class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-secondary-500 focus:ring-secondary-500"
               bind:checked={alsoDownloadAudio}
               disabled={audioOnly}
             />
@@ -281,7 +281,7 @@
                   <div class="space-y-4">
                     <label class="flex items-center space-x-3 cursor-pointer">
                       <input
-                        class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-primary-500 focus:ring-primary-500"
+                        class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-primary-500 focus:ring-primary-500"
                         type="checkbox"
                         bind:checked={audioOnly}
                       />
@@ -309,7 +309,7 @@
                   <div class="space-y-4">
                     <label class="flex items-center space-x-3 cursor-pointer">
                       <input
-                        class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-primary-500 focus:ring-primary-500"
+                        class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-primary-500 focus:ring-primary-500"
                         type="checkbox"
                         bind:checked={embedMetadata}
                       />
@@ -320,7 +320,7 @@
                     </label>
                     <label class="flex items-center space-x-3 cursor-pointer">
                       <input
-                        class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-primary-500 focus:ring-primary-500"
+                        class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-primary-500 focus:ring-primary-500"
                         type="checkbox"
                         bind:checked={embedThumbnail}
                       />
