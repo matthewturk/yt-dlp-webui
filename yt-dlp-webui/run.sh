@@ -1,6 +1,9 @@
 #!/usr/bin/with-contenv bashio
 
-bashio::log.info "Starting yt-dlp WebUI (v1.0.18)..."
+export DENO_INSTALL="/root/.deno"
+export PATH="$DENO_INSTALL/bin:$PATH"
+
+bashio::log.info "Starting yt-dlp WebUI (v1.0.23)..."
 
 # Read options from HA
 YT_DLP_PATH=$(bashio::config 'yt_dlp_path' 'yt-dlp')

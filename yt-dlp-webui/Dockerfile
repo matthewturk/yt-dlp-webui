@@ -9,10 +9,17 @@ RUN apk add --no-cache \
     py3-pip \
     ffmpeg \
     jq \
-    quickjs
+    curl \
+    unzip \
+    libstdc++
 
-# Install yt-dlp
-RUN pip install --no-cache-dir --break-system-packages yt-dlp
+# Install Deno
+RUN curl -fsSL https://deno.land/x/install/install.sh | sh
+ENV DENO_INSTALL="/root/.deno"
+ENV PATH="$DENO_INSTALL/bin:$PATH"
+
+# Install yt-dlp and plugins
+RUN pip install --no-cache-dir --break-system-packages yt-dlp yt-dlp-ejs
 
 # Set up the web app
 WORKDIR /app

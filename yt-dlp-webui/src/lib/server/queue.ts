@@ -229,7 +229,7 @@ class QueueManager {
         "--write-info-json",
         "--newline",
         "--js-runtimes",
-        "quickjs",
+        "deno",
       ];
 
       if (config.extra_args) {
