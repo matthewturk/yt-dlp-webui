@@ -31,7 +31,11 @@ export async function GET() {
 
     // Ensure allowed_locations is an array
     let rawLocations = config.allowed_locations;
-    if (rawLocations && typeof rawLocations === "object" && !Array.isArray(rawLocations)) {
+    if (
+      rawLocations &&
+      typeof rawLocations === "object" &&
+      !Array.isArray(rawLocations)
+    ) {
       rawLocations = Object.values(rawLocations);
     }
 

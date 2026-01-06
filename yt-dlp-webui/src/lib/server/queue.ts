@@ -51,10 +51,16 @@ class QueueManager {
     }
 
     // Ensure allowed_locations is an array
-    if (this.config.allowed_locations && typeof this.config.allowed_locations === "object" && !Array.isArray(this.config.allowed_locations)) {
-      this.config.allowed_locations = Object.values(this.config.allowed_locations);
+    if (
+      this.config.allowed_locations &&
+      typeof this.config.allowed_locations === "object" &&
+      !Array.isArray(this.config.allowed_locations)
+    ) {
+      this.config.allowed_locations = Object.values(
+        this.config.allowed_locations
+      );
     }
-    
+
     if (!Array.isArray(this.config.allowed_locations)) {
       this.config.allowed_locations = defaultConfig.allowed_locations;
     }
