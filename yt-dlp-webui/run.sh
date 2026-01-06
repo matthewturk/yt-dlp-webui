@@ -1,6 +1,6 @@
 #!/usr/bin/with-contenv bashio
 
-bashio::log.info "Starting yt-dlp WebUI (v1.0.32)..."
+bashio::log.info "Starting yt-dlp WebUI (v1.0.33)..."
 
 # Debug information
 bashio::log.info "Deno version: $(deno --version | head -n 1 || echo 'Not found')"
