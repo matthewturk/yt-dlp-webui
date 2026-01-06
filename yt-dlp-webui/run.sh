@@ -1,7 +1,6 @@
 #!/usr/bin/with-contenv bashio
-set -e
 
-bashio::log.info "Starting yt-dlp WebUI..."
+bashio::log.info "Starting yt-dlp WebUI (v1.0.15)..."
 
 # Read options from HA
 YT_DLP_PATH=$(bashio::config 'yt_dlp_path' 'yt-dlp')
@@ -9,7 +8,6 @@ HISTORY_PATH=$(bashio::config 'history_path' '/data/history.json')
 EXTRA_ARGS=$(bashio::config 'extra_args' '')
 AUTO_UPDATE=$(bashio::config 'auto_update' 'true')
 
-# Update yt-dlp if requested
 if [ "$AUTO_UPDATE" = "true" ]; then
     bashio::log.info "Checking for yt-dlp updates..."
     pip install --no-cache-dir --break-system-packages --root-user-action=ignore -U yt-dlp || bashio::log.warning "Failed to update yt-dlp"
@@ -17,41 +15,44 @@ fi
 
 bashio::log.info "Generating application configuration..."
 
-# Safely extract allowed_locations
-if bashio::config.has_value 'allowed_locations'; then
-    bashio::config 'allowed_locations' > /tmp/locations.json
-else
-    echo "[]" > /tmp/locations.json
+# Get allowed_locations. Bashio returns JSON for lists of objects.
+ALLOWED_LOCATIONS=$(bashio::config 'allowed_locations')
+if [ -z "$ALLOWED_LOCATIONS" ] || [ "$ALLOWED_LOCATIONS" == "null" ]; then
+    ALLOWED_LOCATIONS="[]"
 fi
 
-# Ensure it's valid JSON for jq
-if ! jq -e . /tmp/locations.json > /dev/null 2>&1; then
-    bashio::log.warning "Invalid or empty 'allowed_locations'. Defaulting to []."
-    echo "[]" > /tmp/locations.json
-fi
+bashio::log.info "Configured locations: $ALLOWED_LOCATIONS"
 
-# Construct the config.json using --slurpfile (most reliable)
-jq -n \
+# Construct the config.json
+# We use --argjson for the locations because they are already a JSON string from bashio
+CONFIG_JSON=$(jq -n \
   --arg yt_dlp "$YT_DLP_PATH" \
   --arg hist "$HISTORY_PATH" \
+  --argjson locs "$ALLOWED_LOCATIONS" \
   --arg extra "$EXTRA_ARGS" \
-  --slurpfile locs /tmp/locations.json \
   '{
     yt_dlp_path: $yt_dlp,
     history_path: $hist,
-    allowed_locations: ($locs[0] // []),
+    allowed_locations: $locs,
     extra_args: $extra
-  }' > /app/webui_config.json
+  }' 2>/tmp/jq_error)
 
-rm /tmp/locations.json
+if [ $? -ne 0 ]; then
+    bashio::log.error "Failed to generate config JSON! Error: $(cat /tmp/jq_error)"
+    exit 1
+fi
 
-bashio::log.info "Config generated. Path: /app/webui_config.json"
+echo "$CONFIG_JSON" > /app/webui_config.json
+bashio::log.info "Configuration file created at /app/webui_config.json"
+
+# Verify build artifacts
 if [ ! -f /app/build/index.js ]; then
-    bashio::log.error "Build artifacts not found! Expecting /app/build/index.js"
+    bashio::log.error "SvelteKit build artifacts not found at /app/build/index.js"
+    bashio::log.info "Directory content of /app/build:"
+    ls -R /app/build || echo "Build directory not found"
     exit 1
 fi
 
 bashio::log.info "Starting web server at port 3000..."
 cd /app
-# Use exec to ensure node is PID 1 in the sub-shell and s6 manages it correctly
 exec node build/index.js
