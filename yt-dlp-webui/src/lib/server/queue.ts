@@ -61,14 +61,24 @@ class QueueManager {
   }
 
   private getHistory(): HistoryEntry[] {
+    const historyPath = this.getHistoryPath();
+    if (!fs.existsSync(historyPath)) return [];
     try {
-      const historyPath = this.getHistoryPath();
-      if (!fs.existsSync(historyPath)) return [];
       const data = fs.readFileSync(historyPath, "utf-8");
+      if (!data.trim()) return [];
       const history = JSON.parse(data);
       return Array.isArray(history) ? history : [];
     } catch (e) {
-      console.error("Error reading history.json:", e);
+      console.error(
+        `Error reading history.json at ${historyPath}. Moving to backup.`,
+        e
+      );
+      const backupPath = `${historyPath}.bak.${Date.now()}`;
+      try {
+        fs.renameSync(historyPath, backupPath);
+      } catch (err) {
+        console.error("Failed to move corrupted history file:", err);
+      }
       return [];
     }
   }
@@ -185,7 +195,9 @@ class QueueManager {
       }
 
       if (!selectedLocation) {
-        return reject(new Error("No valid download location found in configuration"));
+        return reject(
+          new Error("No valid download location found in configuration")
+        );
       }
 
       const outputDir = selectedLocation.path;
@@ -194,7 +206,10 @@ class QueueManager {
       if (config.extra_args) {
         if (Array.isArray(config.extra_args)) {
           args.push(...config.extra_args);
-        } else if (typeof config.extra_args === "string" && config.extra_args.trim() !== "") {
+        } else if (
+          typeof config.extra_args === "string" &&
+          config.extra_args.trim() !== ""
+        ) {
           // Robustly split by space, ignoring multiple spaces
           args.push(...config.extra_args.trim().split(/\s+/));
         }

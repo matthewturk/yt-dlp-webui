@@ -1,13 +1,19 @@
 #!/usr/bin/with-contenv bashio
 
 # Read options from HA and write to the app's config.json
-YT_DLP_PATH=$(bashio::config 'yt_dlp_path')
-HISTORY_PATH=$(bashio::config 'history_path')
-ALLOWED_LOCATIONS=$(bashio::config 'allowed_locations')
-EXTRA_ARGS=$(bashio::config 'extra_args')
+YT_DLP_PATH=$(bashio::config 'yt_dlp_path' 'yt-dlp')
+HISTORY_PATH=$(bashio::config 'history_path' '/data/history.json')
+EXTRA_ARGS=$(bashio::config 'extra_args' '')
 
-# Ensure ALLOWED_LOCATIONS is valid JSON if empty
-if [ -z "$ALLOWED_LOCATIONS" ] || [ "$ALLOWED_LOCATIONS" == "null" ]; then
+if bashio::config.has_value 'allowed_locations'; then
+    ALLOWED_LOCATIONS=$(bashio::config 'allowed_locations')
+else
+    ALLOWED_LOCATIONS="[]"
+fi
+
+# Ensure ALLOWED_LOCATIONS is valid JSON for jq --argjson
+if [ -z "$ALLOWED_LOCATIONS" ] || [ "$ALLOWED_LOCATIONS" == "null" ] || ! echo "$ALLOWED_LOCATIONS" | jq -e . >/dev/null 2>&1; then
+    bashio::log.warning "Configuration 'allowed_locations' is missing or invalid JSON. Using default."
     ALLOWED_LOCATIONS="[]"
 fi
 
