@@ -22,9 +22,11 @@ if bashio::config.has_value 'allowed_locations'; then
     RAW_LOCS=$(bashio::config 'allowed_locations')
     bashio::log.info "Raw locations from HA: $RAW_LOCS"
     
-    LOCATIONS_JSON=$(echo "$RAW_LOCS" | jq -c 'if . == null then [] elif type == "object" then [.] else . end' 2>/dev/null)
+    # We use jq -s (slurp) to handle cases where bashio returns multiple JSON objects on separate lines
+    # Then we flatten it to ensure we have a single array of objects.
+    LOCATIONS_JSON=$(echo "$RAW_LOCS" | jq -s -c 'map(if type == "array" then .[] else . end)' 2>/dev/null)
     
-    if [ -z "$LOCATIONS_JSON" ]; then
+    if [ -z "$LOCATIONS_JSON" ] || [ "$LOCATIONS_JSON" == "[]" ]; then
         bashio::log.warning "Failed to parse locations as JSON, using default"
         LOCATIONS_JSON='[{"name": "Downloads", "path": "/share/downloads"}]'
     fi

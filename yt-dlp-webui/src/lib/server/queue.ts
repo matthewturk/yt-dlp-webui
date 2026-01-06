@@ -224,7 +224,13 @@ class QueueManager {
       }
 
       const outputDir = selectedLocation.path;
-      const args = [task.url, "--write-info-json", "--newline"];
+      const args = [
+        task.url,
+        "--write-info-json",
+        "--newline",
+        "--js-runtimes",
+        "quickjs",
+      ];
 
       if (config.extra_args) {
         if (Array.isArray(config.extra_args)) {
