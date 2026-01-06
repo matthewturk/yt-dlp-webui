@@ -11,10 +11,13 @@ RUN apk add --no-cache \
     jq \
     curl \
     unzip \
-    libstdc++
+    libstdc++ \
+    libc6-compat \
+    gcompat
 
 # Install Deno
-RUN curl -fsSL https://deno.land/x/install/install.sh | sh
+RUN curl -fsSL https://deno.land/x/install/install.sh | sh && \
+    ln -s /root/.deno/bin/deno /usr/local/bin/deno
 ENV DENO_INSTALL="/root/.deno"
 ENV PATH="$DENO_INSTALL/bin:$PATH"
 

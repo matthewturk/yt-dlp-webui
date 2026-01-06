@@ -53,6 +53,25 @@ Example `config.json`:
 }
 ```
 
+## Filename Templates
+
+The "Custom Filename Template" field in Advanced Configuration supports `yt-dlp` output templates. Common variables include:
+
+- `%(title)s`: Video title
+- `%(ext)s`: File extension
+- `%(id)s`: Video identifier
+- `%(uploader)s`: Uploader name
+- `%(upload_date)s`: Upload date (YYYYMMDD)
+- `%(playlist_title)s`: Name of the playlist
+- `%(playlist_index)s`: Video index in playlist (padded)
+- `%(channel)s`: Channel name
+- `%(resolution)s`: Video resolution (e.g., 1080p)
+
+You can use slashes to create subdirectories, for example:
+`playlists/%(playlist_title)s/%(playlist_index)s - %(title)s.%(ext)s`
+
+For more details, see the [yt-dlp documentation](https://github.com/yt-dlp/yt-dlp#output-template).
+
 ## Home Assistant Support
 
 This project is designed to integrate deeply with Home Assistant.

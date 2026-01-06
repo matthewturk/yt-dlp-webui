@@ -3,12 +3,19 @@
 export DENO_INSTALL="/root/.deno"
 export PATH="$DENO_INSTALL/bin:$PATH"
 
-bashio::log.info "Starting yt-dlp WebUI (v1.0.25)..."
+bashio::log.info "Starting yt-dlp WebUI (v1.0.26)..."
 
 # Debug information
 bashio::log.info "Deno version: $(deno --version | head -n 1 || echo 'Not found')"
+bashio::log.info "Node version: $(node --version | head -n 1 || echo 'Not found')"
+bashio::log.info "Python version: $(python3 --version | head -n 1 || echo 'Not found')"
 bashio::log.info "FFmpeg version: $(ffmpeg -version | head -n 1 || echo 'Not found')"
 bashio::log.info "FFprobe version: $(ffprobe -version | head -n 1 || echo 'Not found')"
+
+# Check if yt-dlp can find a JS interpreter
+if ! deno --version >/dev/null 2>&1 && ! node --version >/dev/null 2>&1; then
+    bashio::log.warning "No JavaScript interpreter (Deno or Node) found. YouTube downloads might be limited."
+fi
 
 # Read options from HA
 YT_DLP_PATH=$(bashio::config 'yt_dlp_path' 'yt-dlp')
