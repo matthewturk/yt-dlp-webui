@@ -4,7 +4,6 @@
     AccordionItem,
     getToastStore,
     ProgressBar,
-    SlideToggle,
   } from "@skeletonlabs/skeleton";
   import type { ToastSettings } from "@skeletonlabs/skeleton";
   import { onMount, onDestroy } from "svelte";
@@ -174,25 +173,18 @@
         </label>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div
-            class="card p-4 variant-soft-surface border border-surface-500/10"
+          <label
+            class="card p-4 variant-soft-surface border border-surface-500/10 flex items-center space-x-4 cursor-pointer hover:variant-soft-primary transition-colors"
           >
-            <SlideToggle name="playlist" bind:checked={isPlaylist} size="sm">
-              <span class="text-sm font-medium">Download as Playlist</span>
-            </SlideToggle>
-          </div>
-          <div
-            class="card p-4 variant-soft-surface border border-surface-500/10"
+            <input type="checkbox" class="checkbox" bind:checked={isPlaylist} />
+            <span class="text-sm font-medium">Download as Playlist</span>
+          </label>
+          <label
+            class="card p-4 variant-soft-surface border border-surface-500/10 flex items-center space-x-4 cursor-pointer hover:variant-soft-warning transition-colors"
           >
-            <SlideToggle
-              name="force"
-              bind:checked={force}
-              size="sm"
-              active="variant-filled-warning"
-            >
-              <span class="text-sm font-medium">Force Re-download</span>
-            </SlideToggle>
-          </div>
+            <input type="checkbox" class="checkbox" bind:checked={force} />
+            <span class="text-sm font-medium">Force Re-download</span>
+          </label>
         </div>
 
         {#if locations.length > 0}
