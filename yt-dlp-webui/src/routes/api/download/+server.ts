@@ -21,6 +21,7 @@ const DownloadSchema = z.object({
     embedThumbnail: z.boolean().optional(),
     advanced: z.boolean().optional(),
     force: z.boolean().optional(),
+    alsoDownloadAudio: z.boolean().optional(),
   }),
 });
 
@@ -37,7 +38,22 @@ export async function POST({ request }) {
 
   const { urls, options } = result.data;
 
-  const tasks = urls.map((url) => queueManager.addTask(url, options));
+  const tasks = [];
+  for (const url of urls) {
+    // Add primary task
+    tasks.push(queueManager.addTask(url, options));
+
+    // Add secondary audio task if requested (and primary wasn't already audio-only)
+    if (options.alsoDownloadAudio && !options.audioOnly) {
+      tasks.push(
+        queueManager.addTask(url, {
+          ...options,
+          audioOnly: true,
+          alsoDownloadAudio: false, // Prevent infinite recursion (not that it would happen here but good practice)
+        })
+      );
+    }
+  }
 
   return json({ message: `Added ${tasks.length} tasks to queue`, tasks });
 }

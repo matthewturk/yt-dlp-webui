@@ -37,6 +37,7 @@
   let embedMetadata = true;
   let embedThumbnail = true;
   let force = false;
+  let alsoDownloadAudio = false;
   let locations: string[] = [];
   let loading = false;
   let error = "";
@@ -105,6 +106,7 @@
             embedMetadata,
             embedThumbnail,
             force,
+            alsoDownloadAudio,
             advanced: true,
           },
         }),
@@ -172,18 +174,31 @@
           ></textarea>
         </label>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <label
             class="card p-4 variant-soft-surface border border-surface-500/10 flex items-center space-x-4 cursor-pointer hover:variant-soft-primary transition-colors"
           >
             <input type="checkbox" class="checkbox" bind:checked={isPlaylist} />
-            <span class="text-sm font-medium">Download as Playlist</span>
+            <span class="text-sm font-medium">Playlist</span>
           </label>
           <label
             class="card p-4 variant-soft-surface border border-surface-500/10 flex items-center space-x-4 cursor-pointer hover:variant-soft-warning transition-colors"
           >
             <input type="checkbox" class="checkbox" bind:checked={force} />
-            <span class="text-sm font-medium">Force Re-download</span>
+            <span class="text-sm font-medium">Force Redownload</span>
+          </label>
+          <label
+            class="card p-4 variant-soft-surface border border-surface-500/10 flex items-center space-x-4 cursor-pointer hover:variant-soft-secondary transition-colors"
+            class:opacity-50={audioOnly}
+            class:pointer-events-none={audioOnly}
+          >
+            <input
+              type="checkbox"
+              class="checkbox"
+              bind:checked={alsoDownloadAudio}
+              disabled={audioOnly}
+            />
+            <span class="text-sm font-medium">Also Download Audio?</span>
           </label>
         </div>
 
