@@ -395,7 +395,7 @@
         </Accordion>
 
         <button
-          class="btn variant-filled-primary w-full py-4 font-bold shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all"
+          class="btn variant-filled-primary w-full py-4 font-bold shadow-lg border border-primary-500/50 hover:scale-[1.01] active:scale-[0.99] transition-all"
           on:click={handleDownload}
           disabled={loading || !urlInput}
         >

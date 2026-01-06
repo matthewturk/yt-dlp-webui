@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir --break-system-packages yt-dlp yt-dlp-ejs
 # Set up the web app
 WORKDIR /app
 COPY . .
-RUN npm install && npm run build
+RUN npm install && npx svelte-kit sync && npm run build
 
 # Environment variables for adapter-node
 ENV PORT=3000

@@ -3,7 +3,7 @@
 export DENO_INSTALL="/root/.deno"
 export PATH="$DENO_INSTALL/bin:$PATH"
 
-bashio::log.info "Starting yt-dlp WebUI (v1.0.28)..."
+bashio::log.info "Starting yt-dlp WebUI (v1.0.30)..."
 
 # Debug information
 bashio::log.info "Deno version: $(deno --version | head -n 1 || echo 'Not found')"
