@@ -15,11 +15,8 @@ RUN apk add --no-cache \
     libc6-compat \
     gcompat
 
-# Install Deno
-RUN curl -fsSL https://deno.land/x/install/install.sh | sh && \
-    ln -s /root/.deno/bin/deno /usr/local/bin/deno
-ENV DENO_INSTALL="/root/.deno"
-ENV PATH="$DENO_INSTALL/bin:$PATH"
+# Install Deno from edge community repo for better Alpine compatibility
+RUN apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/community deno
 
 # Install yt-dlp and plugins
 RUN pip install --no-cache-dir --break-system-packages yt-dlp yt-dlp-ejs

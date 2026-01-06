@@ -271,8 +271,8 @@ class QueueManager {
         task.url,
         "--write-info-json",
         "--newline",
-        "--js-runtime",
-        "deno",
+        "--js-runtimes",
+        "deno,node",
       ];
 
       if (config.extra_args) {
