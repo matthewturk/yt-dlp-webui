@@ -29,20 +29,24 @@ export async function GET() {
       });
     }
 
-    // Ensure allowed_locations is an array
+    // Ensure allowed_locations is an array of objects
     let rawLocations = config.allowed_locations;
     if (
       rawLocations &&
       typeof rawLocations === "object" &&
       !Array.isArray(rawLocations)
     ) {
-      rawLocations = Object.values(rawLocations);
+      if (rawLocations.name && rawLocations.path) {
+        rawLocations = [rawLocations];
+      } else {
+        rawLocations = Object.values(rawLocations);
+      }
     }
 
-    // Only return names to the frontend
-    const locations = (rawLocations || []).map(
-      (loc: any) => loc.name || "Unknown"
-    );
+    // Only return names of valid objects to the frontend
+    const locations = (rawLocations || [])
+      .filter((loc: any) => typeof loc === "object" && loc !== null)
+      .map((loc: any) => loc.name || loc.path || "Unknown");
 
     if (locations.length === 0) {
       locations.push("Default (local)");

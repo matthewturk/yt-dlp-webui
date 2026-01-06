@@ -50,18 +50,31 @@ class QueueManager {
       this.config = defaultConfig;
     }
 
-    // Ensure allowed_locations is an array
-    if (
-      this.config.allowed_locations &&
-      typeof this.config.allowed_locations === "object" &&
-      !Array.isArray(this.config.allowed_locations)
-    ) {
-      this.config.allowed_locations = Object.values(
-        this.config.allowed_locations
-      );
+    // Ensure allowed_locations is an array of objects
+    if (this.config.allowed_locations) {
+      if (
+        typeof this.config.allowed_locations === "object" &&
+        !Array.isArray(this.config.allowed_locations)
+      ) {
+        this.config.allowed_locations = Object.values(
+          this.config.allowed_locations
+        );
+      }
+
+      if (Array.isArray(this.config.allowed_locations)) {
+        this.config.allowed_locations = this.config.allowed_locations
+          .filter((loc: any) => loc && typeof loc === "object")
+          .map((loc: any) => ({
+            name: loc.name || loc.path || "Unknown",
+            path: loc.path || "/share/downloads",
+          }));
+      }
     }
 
-    if (!Array.isArray(this.config.allowed_locations)) {
+    if (
+      !Array.isArray(this.config.allowed_locations) ||
+      this.config.allowed_locations.length === 0
+    ) {
       this.config.allowed_locations = defaultConfig.allowed_locations;
     }
   }
