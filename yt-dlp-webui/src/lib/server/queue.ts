@@ -6,9 +6,16 @@ export interface DownloadTask {
   id: string;
   url: string;
   options: any;
-  status: "queued" | "downloading" | "completed" | "failed" | "skipped";
+  status:
+    | "queued"
+    | "downloading"
+    | "completed"
+    | "failed"
+    | "skipped"
+    | "cancelled";
   progress: string;
   error?: string;
+  logs: string[];
 }
 
 export interface HistoryEntry {
@@ -20,6 +27,7 @@ export interface HistoryEntry {
 class QueueManager {
   private queue: DownloadTask[] = [];
   private activeTask: DownloadTask | null = null;
+  private activeProcess: any = null;
   private config: any = null;
 
   constructor() {
@@ -130,10 +138,39 @@ class QueueManager {
       options,
       status: "queued",
       progress: "0%",
+      logs: [],
     };
     this.queue.push(task);
     this.processQueue();
     return task;
+  }
+
+  cancelTask(id: string) {
+    if (this.activeTask?.id === id && this.activeProcess) {
+      this.activeProcess.kill("SIGINT");
+      this.activeTask.status = "cancelled";
+      this.activeTask.progress = "Cancelled";
+      return true;
+    }
+    const task = this.queue.find((t) => t.id === id);
+    if (task && task.status === "queued") {
+      task.status = "cancelled";
+      task.progress = "Cancelled";
+      return true;
+    }
+    return false;
+  }
+
+  removeTask(id: string) {
+    if (this.activeTask?.id === id) {
+      this.cancelTask(id);
+    }
+    const index = this.queue.findIndex((t) => t.id === id);
+    if (index !== -1) {
+      this.queue.splice(index, 1);
+      return true;
+    }
+    return false;
   }
 
   getQueue() {
@@ -176,17 +213,23 @@ class QueueManager {
 
     this.activeTask = task;
     task.status = "downloading";
+    task.logs = [];
 
     try {
       await this.runDownload(task);
-      task.status = "completed";
-      task.progress = "100%";
-      this.addToHistory(task.url, format);
+      if (task.status !== "cancelled") {
+        task.status = "completed";
+        task.progress = "100%";
+        this.addToHistory(task.url, format);
+      }
     } catch (e: any) {
-      task.status = "failed";
-      task.error = e.message;
+      if (task.status !== "cancelled") {
+        task.status = "failed";
+        task.error = e.message;
+      }
     } finally {
       this.activeTask = null;
+      this.activeProcess = null;
       this.processQueue();
     }
   }
@@ -228,7 +271,7 @@ class QueueManager {
         task.url,
         "--write-info-json",
         "--newline",
-        "--js-runtimes",
+        "--js-runtime",
         "deno",
       ];
 
@@ -292,9 +335,13 @@ class QueueManager {
       }
 
       const process = spawn(config.yt_dlp_path || "yt-dlp", args);
+      this.activeProcess = process;
 
       process.stdout.on("data", (data) => {
         const line = data.toString();
+        task.logs.push(line);
+        if (task.logs.length > 500) task.logs.shift(); // Keep logs manageable
+
         // Simple progress extraction: [download]  10.5% of 100.00MiB at 1.50MiB/s ETA 01:00
         const match = line.match(/\[download\]\s+(\d+\.\d+)%/);
         if (match) {
@@ -303,11 +350,16 @@ class QueueManager {
       });
 
       process.stderr.on("data", (data) => {
-        console.error(`yt-dlp stderr: ${data}`);
+        const line = data.toString();
+        task.logs.push(`stderr: ${line}`);
+        if (task.logs.length > 500) task.logs.shift();
+        console.error(`yt-dlp stderr: ${line}`);
       });
 
       process.on("close", (code) => {
-        if (code === 0) resolve();
+        this.activeProcess = null;
+        if (task.status === "cancelled") resolve();
+        else if (code === 0) resolve();
         else reject(new Error(`yt-dlp exited with code ${code}`));
       });
     });

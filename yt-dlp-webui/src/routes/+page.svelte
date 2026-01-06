@@ -22,6 +22,10 @@
     Info,
     History,
     RefreshCw,
+    Ban,
+    ChevronDown,
+    ChevronUp,
+    Terminal,
   } from "lucide-svelte";
 
   const toastStore = getToastStore();
@@ -41,9 +45,21 @@
   let locations: string[] = [];
   let loading = false;
   let error = "";
+  let showLogs = false;
 
   let queue: any = { active: null, pending: [], completed: [] };
   let pollInterval: any;
+
+  const filenameSuggestions = [
+    { label: "Default", value: "" },
+    { label: "Date - Title", value: "%(upload_date)s - %(title)s.%(ext)s" },
+    { label: "Title [ID]", value: "%(title)s [%(id)s].%(ext)s" },
+    { label: "Uploader - Title", value: "%(uploader)s - %(title)s.%(ext)s" },
+    {
+      label: "Playlist Subfolder",
+      value: "%(playlist_title)s/%(playlist_index)s - %(title)s.%(ext)s",
+    },
+  ];
 
   onMount(async () => {
     try {
@@ -142,6 +158,32 @@
       toastStore.trigger(t);
     } catch (e) {
       console.error("Failed to clear history", e);
+    }
+  }
+
+  async function cancelTask(id: string) {
+    try {
+      await fetch("api/queue/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      fetchQueue();
+    } catch (e) {
+      console.error("Failed to cancel task", e);
+    }
+  }
+
+  async function removeTask(id: string) {
+    try {
+      await fetch("api/queue/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      fetchQueue();
+    } catch (e) {
+      console.error("Failed to remove task", e);
     }
   }
 </script>
@@ -327,12 +369,25 @@
                   <span class="text-xs opacity-60"
                     >Custom Filename Template</span
                   >
-                  <input
-                    class="input"
-                    type="text"
-                    bind:value={filename}
-                    placeholder="%(title)s.%(ext)s"
-                  />
+                  <div class="space-y-2">
+                    <input
+                      class="input"
+                      type="text"
+                      bind:value={filename}
+                      placeholder="%(title)s.%(ext)s"
+                    />
+                    <div class="flex flex-wrap gap-2">
+                      {#each filenameSuggestions as suggestion}
+                        <button
+                          type="button"
+                          class="btn btn-xs variant-soft-primary"
+                          on:click={() => (filename = suggestion.value)}
+                        >
+                          {suggestion.label}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
                 </label>
               </div>
             </svelte:fragment>
@@ -381,7 +436,18 @@
       {#if queue.active}
         <div class="space-y-4">
           <div class="flex flex-col space-y-1">
-            <span class="text-sm font-bold truncate">{queue.active.url}</span>
+            <div class="flex justify-between items-start">
+              <span class="text-sm font-bold truncate flex-1 mr-2"
+                >{queue.active.url}</span
+              >
+              <button
+                class="btn btn-xs variant-soft-error"
+                title="Cancel Download"
+                on:click={() => cancelTask(queue.active.id)}
+              >
+                <Ban size={14} />
+              </button>
+            </div>
             <div class="flex justify-between text-xs opacity-60">
               <span>Downloading...</span>
               <span>{queue.active.progress}</span>
@@ -393,6 +459,38 @@
             meter="variant-filled-secondary"
             track="variant-soft-secondary"
           />
+
+          <!-- Logs Section -->
+          <div class="pt-2">
+            <button
+              class="btn btn-xs variant-soft-surface w-full flex justify-between items-center"
+              on:click={() => (showLogs = !showLogs)}
+            >
+              <span class="flex items-center space-x-2">
+                <Terminal size={12} />
+                <span>Live Logs</span>
+              </span>
+              {#if showLogs}
+                <ChevronUp size={12} />
+              {:else}
+                <ChevronDown size={12} />
+              {/if}
+            </button>
+
+            {#if showLogs}
+              <div
+                class="mt-2 p-2 bg-black/80 rounded-lg font-mono text-[10px] text-green-400 overflow-y-auto max-h-[200px] border border-surface-500/20"
+              >
+                {#each queue.active.logs as log}
+                  <div
+                    class="whitespace-pre-wrap break-all border-b border-white/5 pb-1 mb-1"
+                  >
+                    {log}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
         </div>
       {:else}
         <div
@@ -416,9 +514,15 @@
         <div class="space-y-2 max-h-[200px] overflow-y-auto pr-2">
           {#each queue.pending as task}
             <div
-              class="p-3 variant-soft-surface rounded-lg text-xs truncate border border-surface-500/5"
+              class="p-3 variant-soft-surface rounded-lg text-xs flex justify-between items-center border border-surface-500/5 group"
             >
-              {task.url}
+              <span class="truncate mr-2">{task.url}</span>
+              <button
+                class="opacity-0 group-hover:opacity-100 btn btn-xs variant-soft-error transition-opacity"
+                on:click={() => removeTask(task.id)}
+              >
+                <Trash2 size={12} />
+              </button>
             </div>
           {/each}
         </div>
@@ -460,7 +564,7 @@
                   >
                 {/if}
               </div>
-              <div class="flex-shrink-0">
+              <div class="flex-shrink-0 flex items-center space-x-2">
                 {#if task.status === "completed"}
                   <span class="badge variant-filled-success"
                     ><CheckCircle2 size={12} class="mr-1" /> Done</span
@@ -469,11 +573,21 @@
                   <span class="badge variant-filled-warning"
                     ><Info size={12} class="mr-1" /> Skipped</span
                   >
+                {:else if task.status === "cancelled"}
+                  <span class="badge variant-filled-surface"
+                    ><Ban size={12} class="mr-1" /> Cancelled</span
+                  >
                 {:else}
                   <span class="badge variant-filled-error"
                     ><XCircle size={12} class="mr-1" /> Failed</span
                   >
                 {/if}
+                <button
+                  class="btn btn-xs variant-soft-error"
+                  on:click={() => removeTask(task.id)}
+                >
+                  <Trash2 size={12} />
+                </button>
               </div>
             </div>
           {/each}
