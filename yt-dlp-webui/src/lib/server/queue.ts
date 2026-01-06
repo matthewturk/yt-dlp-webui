@@ -251,12 +251,22 @@ class QueueManager {
         }
       }
 
-      if (task.options.maxResolution && !task.options.audioOnly) {
-        args.push(
-          "-f",
-          `bestvideo[height<=?${task.options.maxResolution}]+bestaudio/best`
-        );
+      // Format selection logic
+      if (!task.options.audioOnly) {
+        if (task.options.maxResolution) {
+          args.push(
+            "-f",
+            `bestvideo[height<=?${task.options.maxResolution}]+bestaudio/best`
+          );
+        } else if (task.options.format) {
+          args.push("-f", task.options.format);
+        } else {
+          // Default to best video if neither resolution nor specific format is set
+          // This overrides any global -f flags in extra_args that might be audio-only
+          args.push("-f", "bestvideo+bestaudio/best");
+        }
       } else if (task.options.format) {
+        // If audioOnly but they specified a format (like bestaudio/best)
         args.push("-f", task.options.format);
       }
 

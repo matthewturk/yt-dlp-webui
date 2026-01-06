@@ -3,7 +3,12 @@
 export DENO_INSTALL="/root/.deno"
 export PATH="$DENO_INSTALL/bin:$PATH"
 
-bashio::log.info "Starting yt-dlp WebUI (v1.0.23)..."
+bashio::log.info "Starting yt-dlp WebUI (v1.0.25)..."
+
+# Debug information
+bashio::log.info "Deno version: $(deno --version | head -n 1 || echo 'Not found')"
+bashio::log.info "FFmpeg version: $(ffmpeg -version | head -n 1 || echo 'Not found')"
+bashio::log.info "FFprobe version: $(ffprobe -version | head -n 1 || echo 'Not found')"
 
 # Read options from HA
 YT_DLP_PATH=$(bashio::config 'yt_dlp_path' 'yt-dlp')

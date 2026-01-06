@@ -178,13 +178,21 @@
           <label
             class="card p-4 variant-soft-surface border border-surface-500/10 flex items-center space-x-4 cursor-pointer hover:variant-soft-primary transition-colors"
           >
-            <input type="checkbox" class="checkbox" bind:checked={isPlaylist} />
+            <input
+              type="checkbox"
+              class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-primary-500 focus:ring-primary-500"
+              bind:checked={isPlaylist}
+            />
             <span class="text-sm font-medium">Playlist</span>
           </label>
           <label
             class="card p-4 variant-soft-surface border border-surface-500/10 flex items-center space-x-4 cursor-pointer hover:variant-soft-warning transition-colors"
           >
-            <input type="checkbox" class="checkbox" bind:checked={force} />
+            <input
+              type="checkbox"
+              class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-warning-500 focus:ring-warning-500"
+              bind:checked={force}
+            />
             <span class="text-sm font-medium">Force Redownload</span>
           </label>
           <label
@@ -194,7 +202,7 @@
           >
             <input
               type="checkbox"
-              class="checkbox"
+              class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-secondary-500 focus:ring-secondary-500"
               bind:checked={alsoDownloadAudio}
               disabled={audioOnly}
             />
@@ -231,7 +239,7 @@
                   <div class="space-y-4">
                     <label class="flex items-center space-x-3 cursor-pointer">
                       <input
-                        class="checkbox"
+                        class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-primary-500 focus:ring-primary-500"
                         type="checkbox"
                         bind:checked={audioOnly}
                       />
@@ -259,7 +267,7 @@
                   <div class="space-y-4">
                     <label class="flex items-center space-x-3 cursor-pointer">
                       <input
-                        class="checkbox"
+                        class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-primary-500 focus:ring-primary-500"
                         type="checkbox"
                         bind:checked={embedMetadata}
                       />
@@ -270,7 +278,7 @@
                     </label>
                     <label class="flex items-center space-x-3 cursor-pointer">
                       <input
-                        class="checkbox"
+                        class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-940-token text-primary-500 focus:ring-primary-500"
                         type="checkbox"
                         bind:checked={embedThumbnail}
                       />

@@ -49,7 +49,9 @@ export async function POST({ request }) {
         queueManager.addTask(url, {
           ...options,
           audioOnly: true,
-          alsoDownloadAudio: false, // Prevent infinite recursion (not that it would happen here but good practice)
+          format: "bestaudio/best", // Ensure we use an audio format for the audio task
+          maxResolution: undefined, // Irrelevant for audio
+          alsoDownloadAudio: false, // Prevent infinite recursion
         })
       );
     }

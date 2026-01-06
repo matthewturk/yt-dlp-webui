@@ -16,7 +16,7 @@ export default {
     extend: {},
   },
   plugins: [
-    forms,
+    forms({ strategy: "class" }),
     skeleton({
       themes: {
         preset: [
