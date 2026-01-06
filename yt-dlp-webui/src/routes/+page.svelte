@@ -191,7 +191,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
   <!-- Left Column: Input & Options -->
   <div class="lg:col-span-7 space-y-6">
-    <div class="card p-6 shadow-xl border border-surface-500/10">
+    <div class="card p-6 shadow-xl border border-surface-500/20">
       <header class="flex items-center space-x-3 mb-6">
         <div class="p-2 variant-soft-primary rounded-lg">
           <Download size={24} />
@@ -423,7 +423,7 @@
   <!-- Right Column: Queue & History -->
   <div class="lg:col-span-5 space-y-6">
     <!-- Active Task -->
-    <div class="card p-6 shadow-xl border border-surface-500/10">
+    <div class="card p-6 shadow-xl border border-surface-500/20">
       <header class="flex justify-between items-center mb-6">
         <div class="flex items-center space-x-3">
           <div class="p-2 variant-soft-secondary rounded-lg">
@@ -502,7 +502,7 @@
     </div>
 
     <!-- Pending Queue -->
-    <div class="card p-6 shadow-xl border border-surface-500/10">
+    <div class="card p-6 shadow-xl border border-surface-500/20">
       <header class="flex items-center space-x-3 mb-6">
         <div class="p-2 variant-soft-surface rounded-lg">
           <Clock size={20} />
@@ -534,7 +534,7 @@
     </div>
 
     <!-- History -->
-    <div class="card p-6 shadow-xl border border-surface-500/10">
+    <div class="card p-6 shadow-xl border border-surface-500/20">
       <header class="flex justify-between items-center mb-6">
         <div class="flex items-center space-x-3">
           <div class="p-2 variant-soft-surface rounded-lg">

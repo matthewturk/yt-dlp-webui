@@ -1,4 +1,5 @@
 <script lang="ts">
+  import "@skeletonlabs/skeleton/themes/theme-modern.css";
   import "../app.postcss";
   import {
     AppShell,
