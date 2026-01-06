@@ -31,26 +31,44 @@ class QueueManager {
 
   private loadConfig() {
     const configPath = path.resolve("webui_config.json");
+    const defaultConfig = {
+      yt_dlp_path: "yt-dlp",
+      allowed_locations: [{ name: "Default", path: "downloads" }],
+      history_path: "history.json",
+      extra_args: "",
+    };
+
     if (fs.existsSync(configPath)) {
-      this.config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      try {
+        const data = fs.readFileSync(configPath, "utf-8");
+        this.config = JSON.parse(data);
+      } catch (e) {
+        console.error("Error reading or parsing webui_config.json:", e);
+        this.config = defaultConfig;
+      }
     } else {
-      this.config = {
-        yt_dlp_path: "yt-dlp",
-        allowed_locations: [{ name: "Default", path: "downloads" }],
-        history_path: "history.json",
-        extra_args: [],
-      };
+      this.config = defaultConfig;
+    }
+
+    // Ensure allowed_locations is an array
+    if (!Array.isArray(this.config.allowed_locations)) {
+      this.config.allowed_locations = defaultConfig.allowed_locations;
     }
   }
 
   private getHistoryPath() {
-    return path.resolve(this.config.history_path || "history.json");
+    return path.resolve(this.config?.history_path || "history.json");
   }
 
   private getHistory(): HistoryEntry[] {
     try {
-      return JSON.parse(fs.readFileSync(this.getHistoryPath(), "utf-8"));
+      const historyPath = this.getHistoryPath();
+      if (!fs.existsSync(historyPath)) return [];
+      const data = fs.readFileSync(historyPath, "utf-8");
+      const history = JSON.parse(data);
+      return Array.isArray(history) ? history : [];
     } catch (e) {
+      console.error("Error reading history.json:", e);
       return [];
     }
   }
@@ -155,11 +173,20 @@ class QueueManager {
       this.loadConfig(); // Refresh config in case it changed
       const config = this.config;
 
-      const selectedLocation = task.options.locationName
-        ? config.allowed_locations.find(
-            (loc: any) => loc.name === task.options.locationName
-          )
-        : config.allowed_locations[0];
+      let selectedLocation = null;
+      if (task.options.locationName) {
+        selectedLocation = config.allowed_locations.find(
+          (loc: any) => loc.name === task.options.locationName
+        );
+      }
+
+      if (!selectedLocation && config.allowed_locations.length > 0) {
+        selectedLocation = config.allowed_locations[0];
+      }
+
+      if (!selectedLocation) {
+        return reject(new Error("No valid download location found in configuration"));
+      }
 
       const outputDir = selectedLocation.path;
       const args = [task.url, "--write-info-json", "--newline"];
@@ -168,8 +195,8 @@ class QueueManager {
         if (Array.isArray(config.extra_args)) {
           args.push(...config.extra_args);
         } else if (typeof config.extra_args === "string" && config.extra_args.trim() !== "") {
-          // Split by space but respect quotes? For now, simple split.
-          args.push(...config.extra_args.split(/\s+/));
+          // Robustly split by space, ignoring multiple spaces
+          args.push(...config.extra_args.trim().split(/\s+/));
         }
       }
 

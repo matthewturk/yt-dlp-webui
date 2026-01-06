@@ -6,6 +6,11 @@ HISTORY_PATH=$(bashio::config 'history_path')
 ALLOWED_LOCATIONS=$(bashio::config 'allowed_locations')
 EXTRA_ARGS=$(bashio::config 'extra_args')
 
+# Ensure ALLOWED_LOCATIONS is valid JSON if empty
+if [ -z "$ALLOWED_LOCATIONS" ] || [ "$ALLOWED_LOCATIONS" == "null" ]; then
+    ALLOWED_LOCATIONS="[]"
+fi
+
 if bashio::config.true 'auto_update'; then
     bashio::log.info "Checking for yt-dlp updates..."
     pip install --no-cache-dir --break-system-packages -U yt-dlp || bashio::log.warning "Failed to update yt-dlp"
