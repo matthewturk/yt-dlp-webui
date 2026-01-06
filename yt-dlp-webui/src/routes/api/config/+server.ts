@@ -29,9 +29,15 @@ export async function GET() {
       });
     }
 
+    // Ensure allowed_locations is an array
+    let rawLocations = config.allowed_locations;
+    if (rawLocations && typeof rawLocations === "object" && !Array.isArray(rawLocations)) {
+      rawLocations = Object.values(rawLocations);
+    }
+
     // Only return names to the frontend
-    const locations = (config.allowed_locations || []).map(
-      (loc: { name: string }) => loc.name
+    const locations = (rawLocations || []).map(
+      (loc: any) => loc.name || "Unknown"
     );
 
     if (locations.length === 0) {

@@ -8,7 +8,8 @@ RUN apk add --no-cache \
     python3 \
     py3-pip \
     ffmpeg \
-    jq
+    jq \
+    quickjs
 
 # Install yt-dlp
 RUN pip install --no-cache-dir --break-system-packages yt-dlp
