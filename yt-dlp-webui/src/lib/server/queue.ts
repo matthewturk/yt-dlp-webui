@@ -272,7 +272,8 @@ class QueueManager {
         "--write-info-json",
         "--newline",
         "--js-runtimes",
-        "deno,node",
+        "--remote-components ejs:github",
+        "deno",
       ];
 
       if (config.extra_args) {
