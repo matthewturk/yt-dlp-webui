@@ -22,7 +22,7 @@ AUTO_UPDATE=$(bashio::config 'auto_update' 'true')
 
 if [ "$AUTO_UPDATE" = "true" ]; then
     bashio::log.info "Checking for yt-dlp updates..."
-    pip install --no-cache-dir --break-system-packages --root-user-action=ignore -U yt-dlp || bashio::log.warning "Failed to update yt-dlp"
+    pip install --no-cache-dir --break-system-packages --root-user-action=ignore -U yt-dlp yt-dlp-ejs || bashio::log.warning "Failed to update yt-dlp"
 fi
 
 bashio::log.info "Generating application configuration..."
