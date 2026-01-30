@@ -271,8 +271,9 @@ class QueueManager {
         task.url,
         "--write-info-json",
         "--newline",
+        "--remote-components",
+        "ejs:github",
         "--js-runtimes",
-        "--remote-components ejs:github",
         "deno",
       ];
 
