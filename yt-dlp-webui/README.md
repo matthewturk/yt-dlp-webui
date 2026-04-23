@@ -6,10 +6,13 @@ A simple web interface for `yt-dlp` built with SvelteKit and Skeleton UI.
 
 - **Batch Downloads**: Queue up multiple URLs at once (one per line).
 - **Download Queue**: Real-time progress tracking and status for active, pending, and completed tasks.
+- **Detailed Queue Modals**: Open full pending and backlog views in pop-up panels for deeper inspection.
 - **Playlist Support**: Toggle playlist downloads with automatic subfolder organization.
 - **Audio Extraction**: Download audio-only in MP3, M4A, Opus, or WAV formats.
 - **Quality Control**: Limit maximum resolution (e.g., 1080p, 720p).
 - **Metadata & Thumbnails**: Embed metadata and thumbnails directly into files.
+- **Enhanced Audio Metadata**: Optional podcast-focused ID3 post-processing for audio downloads.
+- **Output Naming Options**: Keep templates, provide a custom output name, and optionally enforce safe filename sanitization.
 - **Sidecar Metadata**: Automatically downloads full metadata to a `.info.json` sidecar file by default.
 - **Home Assistant Add-on**: Ready to be used as a Home Assistant add-on with Ingress support.
 - **Home Assistant Integration**: Includes a custom component to trigger downloads from HA automations and monitor the queue.

@@ -1,4 +1,5 @@
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
+import type { Buffer } from "buffer";
 import path from "path";
 import fs from "fs";
 
@@ -22,6 +23,11 @@ export interface HistoryEntry {
   url: string;
   format: string;
   timestamp: string;
+}
+
+interface QueueResponseOptions {
+  includeAllCompleted?: boolean;
+  completedLimit?: number;
 }
 
 class QueueManager {
@@ -65,7 +71,7 @@ class QueueManager {
         !Array.isArray(this.config.allowed_locations)
       ) {
         this.config.allowed_locations = Object.values(
-          this.config.allowed_locations
+          this.config.allowed_locations,
         );
       }
 
@@ -91,6 +97,250 @@ class QueueManager {
     return path.resolve(this.config?.history_path || "history.json");
   }
 
+  private formatDate(dateStr: string): string {
+    if (typeof dateStr === "string" && /^\d{8}$/.test(dateStr)) {
+      return `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+    }
+    return dateStr || "";
+  }
+
+  private cleanMetadataString(value: string): string {
+    if (!value) return "";
+    return value.replace(/\s*\[Audio Only\]\s*/gi, "").trim();
+  }
+
+  private sanitizeFileNamePart(value: string): string {
+    // Keep names portable across filesystems and avoid problematic punctuation.
+    return value
+      .replace(/[\\/:*?"<>|]/g, "-")
+      .replace(/[\x00-\x1f\x80-\x9f]/g, "")
+      .replace(/\s+/g, " ")
+      .replace(/\.+$/g, "")
+      .trim()
+      .slice(0, 180);
+  }
+
+  private listFilesRecursive(rootDir: string): string[] {
+    if (!fs.existsSync(rootDir)) return [];
+
+    const entries = fs.readdirSync(rootDir, { withFileTypes: true });
+    const files: string[] = [];
+
+    for (const entry of entries) {
+      const fullPath = path.join(rootDir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...this.listFilesRecursive(fullPath));
+      } else {
+        files.push(fullPath);
+      }
+    }
+
+    return files;
+  }
+
+  private findLikelyInfoJson(mediaPath: string): string | null {
+    const dir = path.dirname(mediaPath);
+    const baseNoExt = path.basename(mediaPath, path.extname(mediaPath));
+    const directMatch = path.join(dir, `${baseNoExt}.info.json`);
+    if (fs.existsSync(directMatch)) {
+      return directMatch;
+    }
+
+    const idMatch = path.basename(mediaPath).match(/\[([^\]]+)\]/);
+    if (!idMatch) return null;
+
+    const idToken = `[${idMatch[1]}]`;
+    const siblings = fs.readdirSync(dir);
+    const candidate = siblings.find(
+      (name: string) => name.endsWith(".info.json") && name.includes(idToken),
+    );
+
+    return candidate ? path.join(dir, candidate) : null;
+  }
+
+  private buildEnhancedMetadataTags(infoJson: any): Array<[string, string]> {
+    const rawTitle = this.cleanMetadataString(infoJson?.title || "");
+    const uploader = this.cleanMetadataString(
+      infoJson?.uploader || infoJson?.channel || infoJson?.artist || "",
+    );
+    const series = this.cleanMetadataString(
+      infoJson?.series || infoJson?.album || uploader || "Unknown Podcast",
+    );
+    const description = infoJson?.description || "";
+
+    const seasonNumber = Number.isFinite(Number(infoJson?.season_number))
+      ? Number(infoJson.season_number)
+      : 1;
+
+    let episodeNumber = Number.isFinite(Number(infoJson?.episode_number))
+      ? Number(infoJson.episode_number)
+      : 0;
+
+    if (!episodeNumber && Number.isFinite(Number(infoJson?.playlist_index))) {
+      episodeNumber = Number(infoJson.playlist_index);
+    }
+
+    const language = infoJson?.language || "en";
+    const releaseDate =
+      this.formatDate(infoJson?.release_date || "") ||
+      this.formatDate(infoJson?.upload_date || "");
+
+    const tags: Array<[string, string]> = [
+      ["title", rawTitle],
+      ["album", series],
+      ["album_sort", series],
+      ["series", series],
+      ["movement_name", series],
+      ["artist", uploader],
+      ["artist_sort", uploader],
+      ["album_artist", uploader],
+      ["album_artist_sort", uploader],
+      ["disc", String(seasonNumber)],
+      ["track", String(episodeNumber)],
+      ["movement", String(episodeNumber)],
+      ["comment", description],
+      ["description", description],
+      ["lyrics", description],
+      ["date", releaseDate],
+      ["publisher", uploader],
+      ["genre", "Podcast"],
+      ["language", language],
+      ["podcast", "1"],
+    ];
+
+    return tags.filter(([, value]) => value !== "");
+  }
+
+  /**
+   * When absMode is active, yt-dlp writes thumbnail images alongside audio
+   * (e.g. "Show/Episode [id].jpg"). ABS reads a cover.jpg in the podcast
+   * folder as the show artwork. This promotes the first new image in each
+   * podcast subfolder to cover.jpg if one doesn't already exist.
+   */
+  private promoteCoverArt(
+    task: DownloadTask,
+    outputDir: string,
+    beforeFiles: string[],
+  ): void {
+    const imageExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+    const afterFiles = this.listFilesRecursive(outputDir);
+    const beforeSet = new Set(beforeFiles);
+
+    // Collect new image files grouped by their parent directory.
+    const newImagesByDir = new Map<string, string[]>();
+    for (const file of afterFiles) {
+      if (
+        !beforeSet.has(file) &&
+        imageExtensions.has(path.extname(file).toLowerCase())
+      ) {
+        const dir = path.dirname(file);
+        if (!newImagesByDir.has(dir)) newImagesByDir.set(dir, []);
+        newImagesByDir.get(dir)!.push(file);
+      }
+    }
+
+    for (const [dir, images] of newImagesByDir) {
+      // Skip the root output dir itself — only act on podcast subfolders.
+      if (path.resolve(dir) === path.resolve(outputDir)) continue;
+
+      const coverPath = path.join(dir, "cover.jpg");
+      if (fs.existsSync(coverPath)) continue;
+
+      // Use the first new image as cover.jpg (copy so the source file is preserved
+      // in case ABS or other tools also reference it).
+      const source = images[0];
+      try {
+        fs.copyFileSync(source, coverPath);
+        task.logs.push(`abs: wrote cover.jpg from ${source}`);
+      } catch (err: any) {
+        task.logs.push(`abs: failed to write cover.jpg (${err?.message})`);
+      }
+    }
+  }
+
+  private applyEnhancedAudioMetadata(
+    task: DownloadTask,
+    outputDir: string,
+    beforeFiles: string[],
+  ): void {
+    if (!task.options.audioOnly || !task.options.embedMetadata) return;
+    if (task.options.enhancedAudioMetadata === false) return;
+
+    if (task.options.absMode) {
+      this.promoteCoverArt(task, outputDir, beforeFiles);
+    }
+
+    const afterFiles = this.listFilesRecursive(outputDir);
+    const beforeSet = new Set(beforeFiles);
+    const newFiles = afterFiles.filter((file) => !beforeSet.has(file));
+
+    const audioExtensions = new Set([
+      ".mp3",
+      ".m4a",
+      ".opus",
+      ".wav",
+      ".ogg",
+      ".flac",
+      ".aac",
+    ]);
+
+    const newAudioFiles = newFiles.filter((file) =>
+      audioExtensions.has(path.extname(file).toLowerCase()),
+    );
+
+    for (const mediaPath of newAudioFiles) {
+      const infoPath = this.findLikelyInfoJson(mediaPath);
+      if (!infoPath || !fs.existsSync(infoPath)) {
+        task.logs.push(`metadata: skipped ${mediaPath} (no .info.json found)`);
+        continue;
+      }
+
+      try {
+        const infoJson = JSON.parse(fs.readFileSync(infoPath, "utf-8"));
+        const tags = this.buildEnhancedMetadataTags(infoJson);
+        const tempPath = `${mediaPath}.tagtmp${path.extname(mediaPath)}`;
+
+        const ffmpegArgs = [
+          "-y",
+          "-v",
+          "error",
+          "-i",
+          mediaPath,
+          "-map",
+          "0",
+          "-c",
+          "copy",
+        ];
+
+        for (const [key, value] of tags) {
+          ffmpegArgs.push("-metadata", `${key}=${value}`);
+        }
+
+        ffmpegArgs.push(tempPath);
+
+        const ffmpeg = spawnSync("ffmpeg", ffmpegArgs, { encoding: "utf-8" });
+        const exitCode = ffmpeg.status ?? 1;
+        const ffmpegError = ffmpeg.stderr || "";
+
+        if (exitCode === 0 && fs.existsSync(tempPath)) {
+          fs.renameSync(tempPath, mediaPath);
+          task.logs.push(`metadata: enhanced ID3 tags applied to ${mediaPath}`);
+        } else {
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+          task.logs.push(
+            `metadata: ffmpeg tagging failed for ${mediaPath}${
+              ffmpegError ? ` (${ffmpegError.trim()})` : ""
+            }`,
+          );
+        }
+      } catch (error: any) {
+        task.logs.push(
+          `metadata: failed to process ${mediaPath} (${error?.message || "unknown error"})`,
+        );
+      }
+    }
+  }
+
   private getHistory(): HistoryEntry[] {
     const historyPath = this.getHistoryPath();
     if (!fs.existsSync(historyPath)) return [];
@@ -102,7 +352,7 @@ class QueueManager {
     } catch (e) {
       console.error(
         `Error reading history.json at ${historyPath}. Moving to backup.`,
-        e
+        e,
       );
       const backupPath = `${historyPath}.bak.${Date.now()}`;
       try {
@@ -127,7 +377,7 @@ class QueueManager {
   private isAlreadyDownloaded(url: string, format: string): boolean {
     const history = this.getHistory();
     return history.some(
-      (entry) => entry.url === url && entry.format === format
+      (entry) => entry.url === url && entry.format === format,
     );
   }
 
@@ -173,24 +423,39 @@ class QueueManager {
     return false;
   }
 
-  getQueue() {
+  getQueue(options: QueueResponseOptions = {}) {
+    const includeAllCompleted = options.includeAllCompleted === true;
+    const completedLimit =
+      typeof options.completedLimit === "number" && options.completedLimit > 0
+        ? Math.floor(options.completedLimit)
+        : 20;
+
+    const pending = this.queue.filter((t) => t.status === "queued");
+    const completedAll = this.queue.filter(
+      (t) =>
+        t.status === "completed" ||
+        t.status === "failed" ||
+        t.status === "skipped" ||
+        t.status === "cancelled",
+    );
+
     return {
       active: this.activeTask,
-      pending: this.queue.filter((t) => t.status === "queued"),
-      completed: this.queue
-        .filter(
-          (t) =>
-            t.status === "completed" ||
-            t.status === "failed" ||
-            t.status === "skipped"
-        )
-        .slice(-20),
+      pending,
+      completed: includeAllCompleted
+        ? completedAll
+        : completedAll.slice(-completedLimit),
+      stats: {
+        total: this.queue.length,
+        queued: pending.length,
+        completed: completedAll.length,
+      },
     };
   }
 
   clearCompleted() {
     this.queue = this.queue.filter(
-      (t) => t.status === "queued" || t.status === "downloading"
+      (t) => t.status === "queued" || t.status === "downloading",
     );
   }
 
@@ -217,13 +482,13 @@ class QueueManager {
 
     try {
       await this.runDownload(task);
-      if (task.status !== "cancelled") {
+      if (this.activeTask?.status !== "cancelled") {
         task.status = "completed";
         task.progress = "100%";
         this.addToHistory(task.url, format);
       }
     } catch (e: any) {
-      if (task.status !== "cancelled") {
+      if (this.activeTask?.status !== "cancelled") {
         task.status = "failed";
         task.error = e.message;
       }
@@ -252,7 +517,7 @@ class QueueManager {
       let selectedLocation = null;
       if (task.options.locationName) {
         selectedLocation = config.allowed_locations.find(
-          (loc: any) => loc.name === task.options.locationName
+          (loc: any) => loc.name === task.options.locationName,
         );
       }
 
@@ -262,11 +527,12 @@ class QueueManager {
 
       if (!selectedLocation) {
         return reject(
-          new Error("No valid download location found in configuration")
+          new Error("No valid download location found in configuration"),
         );
       }
 
       const outputDir = selectedLocation.path;
+      const beforeFiles = this.listFilesRecursive(outputDir);
       const args = [
         task.url,
         "--write-info-json",
@@ -296,12 +562,16 @@ class QueueManager {
         }
       }
 
+      if (task.options.sanitizeFilename) {
+        args.push("--restrict-filenames");
+      }
+
       // Format selection logic
       if (!task.options.audioOnly) {
         if (task.options.maxResolution) {
           args.push(
             "-f",
-            `bestvideo[height<=?${task.options.maxResolution}]+bestaudio/best`
+            `bestvideo[height<=?${task.options.maxResolution}]+bestaudio/best`,
           );
         } else if (task.options.format) {
           args.push("-f", task.options.format);
@@ -318,28 +588,56 @@ class QueueManager {
       if (task.options.embedMetadata) args.push("--embed-metadata");
       if (task.options.embedThumbnail) args.push("--embed-thumbnail");
 
-      if (task.options.isPlaylist) {
+      // Audiobookshelf podcast mode: write a separate thumbnail file so we can
+      // promote it to cover.jpg in the show folder during post-processing.
+      if (task.options.absMode) {
+        args.push("--write-thumbnail", "--convert-thumbnails", "jpg");
+      }
+
+      let customName = "";
+      if (task.options.outputNameMode === "custom_title") {
+        customName = this.sanitizeFileNamePart(task.options.outputName || "");
+      }
+
+      if (task.options.absMode && task.options.audioOnly) {
+        // ABS podcast library: flat folder per show — no season subfolders.
+        // yt-dlp expands %(series,uploader,channel)s: tries series first, then
+        // uploader, then channel so the folder name is always the show name.
+        const showFolder = customName || "%(series,uploader,channel)s";
+        args.push("--no-playlist");
+        args.push(
+          "-o",
+          path.join(outputDir, `${showFolder}/%(title)s [%(id)s].%(ext)s`),
+        );
+      } else if (task.options.isPlaylist) {
         args.push("--yes-playlist");
         args.push(
           "-o",
           path.join(
             outputDir,
-            task.options.filename ||
-              "%(playlist_title)s/%(playlist_index)s - %(title)s.%(ext)s"
-          )
+            customName
+              ? `${customName}/%(playlist_index)s - %(title)s [%(id)s].%(ext)s`
+              : task.options.filename ||
+                  "%(playlist_title)s/%(playlist_index)s - %(title)s.%(ext)s",
+          ),
         );
       } else {
         args.push("--no-playlist");
         args.push(
           "-o",
-          path.join(outputDir, task.options.filename || "%(title)s.%(ext)s")
+          path.join(
+            outputDir,
+            customName
+              ? `${customName} [%(id)s].%(ext)s`
+              : task.options.filename || "%(title)s.%(ext)s",
+          ),
         );
       }
 
       const process = spawn(config.yt_dlp_path || "yt-dlp", args);
       this.activeProcess = process;
 
-      process.stdout.on("data", (data) => {
+      process.stdout.on("data", (data: Buffer) => {
         const line = data.toString();
         task.logs.push(line);
         if (task.logs.length > 500) task.logs.shift(); // Keep logs manageable
@@ -351,18 +649,27 @@ class QueueManager {
         }
       });
 
-      process.stderr.on("data", (data) => {
+      process.stderr.on("data", (data: Buffer) => {
         const line = data.toString();
         task.logs.push(`stderr: ${line}`);
         if (task.logs.length > 500) task.logs.shift();
         console.error(`yt-dlp stderr: ${line}`);
       });
 
-      process.on("close", (code) => {
+      process.on("close", (code: number | null) => {
         this.activeProcess = null;
-        if (task.status === "cancelled") resolve();
-        else if (code === 0) resolve();
-        else reject(new Error(`yt-dlp exited with code ${code}`));
+        if (task.status === "cancelled") {
+          resolve();
+          return;
+        }
+
+        if (code === 0) {
+          this.applyEnhancedAudioMetadata(task, outputDir, beforeFiles);
+          resolve();
+          return;
+        }
+
+        reject(new Error(`yt-dlp exited with code ${code}`));
       });
     });
   }

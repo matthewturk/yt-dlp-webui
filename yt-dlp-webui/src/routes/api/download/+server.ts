@@ -7,7 +7,7 @@ const DownloadSchema = z.object({
     z
       .string()
       .url()
-      .transform((url) => [url])
+      .transform((url) => [url]),
   ),
   options: z.object({
     format: z.string().optional(),
@@ -18,7 +18,12 @@ const DownloadSchema = z.object({
     audioFormat: z.string().optional(),
     maxResolution: z.string().optional(),
     embedMetadata: z.boolean().optional(),
+    enhancedAudioMetadata: z.boolean().optional(),
     embedThumbnail: z.boolean().optional(),
+    outputNameMode: z.enum(["default", "custom_title"]).optional(),
+    outputName: z.string().optional(),
+    sanitizeFilename: z.boolean().optional(),
+    absMode: z.boolean().optional(),
     advanced: z.boolean().optional(),
     force: z.boolean().optional(),
     alsoDownloadAudio: z.boolean().optional(),
@@ -32,7 +37,7 @@ export async function POST({ request }) {
   if (!result.success) {
     return json(
       { error: "Invalid request", details: result.error },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -52,7 +57,7 @@ export async function POST({ request }) {
           format: "bestaudio/best", // Ensure we use an audio format for the audio task
           maxResolution: undefined, // Irrelevant for audio
           alsoDownloadAudio: false, // Prevent infinite recursion
-        })
+        }),
       );
     }
   }

@@ -39,15 +39,28 @@
   let audioFormat = "mp3";
   let maxResolution = "";
   let embedMetadata = true;
+  let enhancedAudioMetadata = true;
   let embedThumbnail = true;
+  let outputNameMode: "default" | "custom_title" = "default";
+  let outputName = "";
+  let sanitizeFilename = true;
+  let absMode = false;
   let force = false;
   let alsoDownloadAudio = false;
   let locations: string[] = [];
   let loading = false;
   let error = "";
   let showLogs = false;
+  let showPendingModal = false;
+  let showBacklogModal = false;
 
   let queue: any = { active: null, pending: [], completed: [] };
+  let detailedQueue: any = {
+    active: null,
+    pending: [],
+    completed: [],
+    stats: {},
+  };
   let pollInterval: any;
 
   const filenameSuggestions = [
@@ -90,6 +103,19 @@
     }
   }
 
+  async function fetchDetailedQueue() {
+    try {
+      const response = await fetch("api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ includeAllCompleted: true }),
+      });
+      detailedQueue = await response.json();
+    } catch (e) {
+      console.error("Failed to fetch detailed queue", e);
+    }
+  }
+
   async function handleDownload() {
     loading = true;
     error = "";
@@ -120,7 +146,12 @@
             audioFormat,
             maxResolution,
             embedMetadata,
+            enhancedAudioMetadata,
             embedThumbnail,
+            outputNameMode,
+            outputName,
+            sanitizeFilename,
+            absMode,
             force,
             alsoDownloadAudio,
             advanced: true,
@@ -185,6 +216,16 @@
     } catch (e) {
       console.error("Failed to remove task", e);
     }
+  }
+
+  async function openPendingModal() {
+    await fetchDetailedQueue();
+    showPendingModal = true;
+  }
+
+  async function openBacklogModal() {
+    await fetchDetailedQueue();
+    showBacklogModal = true;
   }
 </script>
 
@@ -303,6 +344,27 @@
                           <option value="wav">WAV</option>
                         </select>
                       </label>
+                      <label
+                        class="card p-3 variant-soft-tertiary border border-tertiary-500/20 flex items-start space-x-3 cursor-pointer"
+                      >
+                        <input
+                          class="form-checkbox w-5 h-5 mt-0.5 rounded border-surface-500/30 bg-surface-50-900-token text-tertiary-500 focus:ring-tertiary-500"
+                          type="checkbox"
+                          bind:checked={absMode}
+                        />
+                        <div>
+                          <span class="text-sm font-semibold block"
+                            >Audiobookshelf Podcast Mode</span
+                          >
+                          <span
+                            class="text-[10px] opacity-60 leading-snug block mt-0.5"
+                            >Organises files into <em>ShowName/episode.ext</em>,
+                            writes cover.jpg, and embeds full podcast ID3 tags —
+                            ready to drop directly into an ABS podcast library
+                            folder.</span
+                          >
+                        </div>
+                      </label>
                     {/if}
                   </div>
 
@@ -318,6 +380,18 @@
                         <span>Embed Metadata</span>
                       </span>
                     </label>
+                    {#if audioOnly}
+                      <label
+                        class="flex items-center space-x-3 cursor-pointer pl-7"
+                      >
+                        <input
+                          class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-primary-500 focus:ring-primary-500"
+                          type="checkbox"
+                          bind:checked={enhancedAudioMetadata}
+                        />
+                        <span class="text-sm">Enhanced Audio ID3 Tags</span>
+                      </label>
+                    {/if}
                     <label class="flex items-center space-x-3 cursor-pointer">
                       <input
                         class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-primary-500 focus:ring-primary-500"
@@ -388,6 +462,45 @@
                       {/each}
                     </div>
                   </div>
+                </label>
+
+                <div class="divider opacity-10"></div>
+
+                <label class="label">
+                  <span class="text-xs opacity-60">Output Name Control</span>
+                  <select class="select" bind:value={outputNameMode}>
+                    <option value="default">Use Template/Default Naming</option>
+                    <option value="custom_title"
+                      >Set a Custom Base Name (safe + stable)</option
+                    >
+                  </select>
+                </label>
+
+                {#if outputNameMode === "custom_title"}
+                  <label class="label">
+                    <span class="text-xs opacity-60">Custom Output Name</span>
+                    <input
+                      class="input"
+                      type="text"
+                      bind:value={outputName}
+                      placeholder="Podcast Episode"
+                    />
+                    <span class="text-[10px] opacity-60"
+                      >Files will append the source ID automatically to avoid
+                      collisions.</span
+                    >
+                  </label>
+                {/if}
+
+                <label class="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-primary-500 focus:ring-primary-500"
+                    type="checkbox"
+                    bind:checked={sanitizeFilename}
+                  />
+                  <span class="text-sm"
+                    >Auto-strip difficult filename characters</span
+                  >
                 </label>
               </div>
             </svelte:fragment>
@@ -507,7 +620,15 @@
         <div class="p-2 variant-soft-surface rounded-lg">
           <Clock size={20} />
         </div>
-        <h3 class="h3">Pending Queue ({queue.pending.length})</h3>
+        <div class="flex items-center justify-between w-full gap-3">
+          <h3 class="h3">Pending Queue ({queue.pending.length})</h3>
+          <button
+            class="btn btn-xs variant-soft-primary"
+            on:click={openPendingModal}
+          >
+            Detailed View
+          </button>
+        </div>
       </header>
 
       {#if queue.pending.length > 0}
@@ -542,12 +663,23 @@
           </div>
           <h3 class="h3">Recent Activity</h3>
         </div>
-        {#if queue.completed.length > 0}
-          <button class="btn btn-sm variant-soft-error" on:click={clearHistory}>
-            <Trash2 size={14} class="mr-1" />
-            <span>Clear</span>
+        <div class="flex items-center gap-2">
+          <button
+            class="btn btn-xs variant-soft-primary"
+            on:click={openBacklogModal}
+          >
+            Full Backlog
           </button>
-        {/if}
+          {#if queue.completed.length > 0}
+            <button
+              class="btn btn-sm variant-soft-error"
+              on:click={clearHistory}
+            >
+              <Trash2 size={14} class="mr-1" />
+              <span>Clear</span>
+            </button>
+          {/if}
+        </div>
       </header>
 
       {#if queue.completed.length > 0}
@@ -600,6 +732,119 @@
     </div>
   </div>
 </div>
+
+{#if showPendingModal}
+  <button
+    type="button"
+    aria-label="Close pending queue details"
+    class="fixed inset-0 bg-black/50 z-40"
+    on:click={() => (showPendingModal = false)}
+  ></button>
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      class="card w-full max-w-4xl max-h-[85vh] overflow-hidden border border-surface-500/20 shadow-2xl"
+    >
+      <header
+        class="p-4 border-b border-surface-500/20 flex items-center justify-between"
+      >
+        <h4 class="h4">
+          Detailed Pending Queue ({detailedQueue.pending?.length || 0})
+        </h4>
+        <button
+          class="btn btn-xs variant-soft-surface"
+          on:click={() => (showPendingModal = false)}
+        >
+          Close
+        </button>
+      </header>
+      <div class="p-4 overflow-auto max-h-[70vh] space-y-2">
+        {#if detailedQueue.pending?.length > 0}
+          {#each detailedQueue.pending as task, index}
+            <div
+              class="card p-3 variant-soft-surface border border-surface-500/10"
+            >
+              <div class="flex justify-between items-start gap-3">
+                <div class="min-w-0">
+                  <p class="text-xs opacity-60">#{index + 1}</p>
+                  <p class="text-sm font-semibold break-all">{task.url}</p>
+                  <p class="text-xs opacity-60 mt-1">
+                    Audio: {task.options?.audioOnly ? "Yes" : "No"} | Location: {task
+                      .options?.locationName || "Default"}
+                  </p>
+                </div>
+                <button
+                  class="btn btn-xs variant-soft-error"
+                  on:click={() => removeTask(task.id)}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </div>
+          {/each}
+        {:else}
+          <p class="text-sm opacity-60 italic">No pending items.</p>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showBacklogModal}
+  <button
+    type="button"
+    aria-label="Close full backlog details"
+    class="fixed inset-0 bg-black/50 z-40"
+    on:click={() => (showBacklogModal = false)}
+  ></button>
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      class="card w-full max-w-5xl max-h-[85vh] overflow-hidden border border-surface-500/20 shadow-2xl"
+    >
+      <header
+        class="p-4 border-b border-surface-500/20 flex items-center justify-between"
+      >
+        <h4 class="h4">
+          Full Backlog ({detailedQueue.completed?.length || 0})
+        </h4>
+        <button
+          class="btn btn-xs variant-soft-surface"
+          on:click={() => (showBacklogModal = false)}
+        >
+          Close
+        </button>
+      </header>
+      <div class="p-4 overflow-auto max-h-[70vh] space-y-2">
+        {#if detailedQueue.completed?.length > 0}
+          {#each detailedQueue.completed as task}
+            <div
+              class="card p-3 variant-soft-surface border border-surface-500/10"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold break-all">{task.url}</p>
+                  <p class="text-xs opacity-60">
+                    Status: {task.status} | Progress: {task.progress}
+                  </p>
+                  {#if task.error}
+                    <p class="text-xs text-error-500 break-all">{task.error}</p>
+                  {/if}
+                </div>
+                <button
+                  class="btn btn-xs variant-soft-error"
+                  on:click={() => removeTask(task.id)}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </div>
+          {/each}
+        {:else}
+          <p class="text-sm opacity-60 italic">No backlog entries yet.</p>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   /* Custom scrollbar for a cleaner look */
