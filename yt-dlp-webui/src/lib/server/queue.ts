@@ -25,6 +25,12 @@ export interface HistoryEntry {
   timestamp: string;
 }
 
+interface AudioProbeResult {
+  bitrateKbps: number;
+  codec?: string;
+  ext?: string;
+}
+
 interface QueueResponseOptions {
   includeAllCompleted?: boolean;
   completedLimit?: number;
@@ -118,6 +124,116 @@ class QueueManager {
       .replace(/\.+$/g, "")
       .trim()
       .slice(0, 180);
+  }
+
+  private parseBitrateKbps(value: unknown): number | null {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) return null;
+    return Math.round(numericValue);
+  }
+
+  private getSelectedAudioProbe(infoJson: any): AudioProbeResult | null {
+    const candidates = [
+      ...(Array.isArray(infoJson?.requested_downloads)
+        ? infoJson.requested_downloads
+        : []),
+      ...(Array.isArray(infoJson?.requested_formats)
+        ? infoJson.requested_formats
+        : []),
+      infoJson,
+    ];
+
+    for (const candidate of candidates) {
+      if (!candidate || typeof candidate !== "object") continue;
+
+      const isAudioOnly =
+        candidate.vcodec === "none" ||
+        (!candidate.vcodec &&
+          typeof candidate.acodec === "string" &&
+          candidate.acodec !== "none");
+
+      if (!isAudioOnly) continue;
+
+      const bitrateKbps =
+        this.parseBitrateKbps(candidate.abr) ??
+        this.parseBitrateKbps(candidate.tbr);
+
+      if (!bitrateKbps) continue;
+
+      return {
+        bitrateKbps,
+        codec:
+          typeof candidate.acodec === "string" ? candidate.acodec : undefined,
+        ext: typeof candidate.ext === "string" ? candidate.ext : undefined,
+      };
+    }
+
+    return null;
+  }
+
+  private resolveLossyAudioQuality(
+    task: DownloadTask,
+    ytDlpPath: string,
+    baseArgs: string[],
+  ): string | null {
+    const targetFormat = String(task.options.audioFormat || "").toLowerCase();
+    const lossyFormats = new Set(["aac", "m4a", "mp3", "opus", "vorbis"]);
+
+    if (!lossyFormats.has(targetFormat)) {
+      return null;
+    }
+
+    const probeArgs = [
+      ...baseArgs,
+      "--simulate",
+      "--skip-download",
+      "--dump-single-json",
+      "--no-warnings",
+    ];
+
+    const probe = spawnSync(ytDlpPath, probeArgs, {
+      encoding: "utf-8",
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    if (probe.status !== 0) {
+      const message =
+        probe.stderr?.trim() || probe.stdout?.trim() || "unknown error";
+      task.logs.push(`audio: bitrate probe failed (${message})`);
+      return null;
+    }
+
+    const probeOutput = probe.stdout?.trim();
+    if (!probeOutput) {
+      task.logs.push("audio: bitrate probe returned no JSON output");
+      return null;
+    }
+
+    try {
+      const infoJson = JSON.parse(probeOutput);
+      const selectedAudio = this.getSelectedAudioProbe(infoJson);
+      if (!selectedAudio) {
+        task.logs.push(
+          "audio: source bitrate unavailable; using yt-dlp default quality",
+        );
+        return null;
+      }
+
+      task.logs.push(
+        `audio: capping ${targetFormat} transcode to source bitrate ${selectedAudio.bitrateKbps}K${
+          selectedAudio.codec || selectedAudio.ext
+            ? ` (${selectedAudio.codec || selectedAudio.ext})`
+            : ""
+        }`,
+      );
+
+      return `${selectedAudio.bitrateKbps}K`;
+    } catch (error: any) {
+      task.logs.push(
+        `audio: failed to parse bitrate probe (${error?.message || "invalid JSON"})`,
+      );
+      return null;
+    }
   }
 
   private listFilesRecursive(rootDir: string): string[] {
@@ -533,9 +649,9 @@ class QueueManager {
 
       const outputDir = selectedLocation.path;
       const beforeFiles = this.listFilesRecursive(outputDir);
-      const args = [
+      const ytDlpPath = config.yt_dlp_path || "yt-dlp";
+      const baseArgs = [
         task.url,
-        "--write-info-json",
         "--newline",
         "--remote-components",
         "ejs:github",
@@ -545,22 +661,17 @@ class QueueManager {
 
       if (config.extra_args) {
         if (Array.isArray(config.extra_args)) {
-          args.push(...config.extra_args);
+          baseArgs.push(...config.extra_args);
         } else if (
           typeof config.extra_args === "string" &&
           config.extra_args.trim() !== ""
         ) {
           // Robustly split by space, ignoring multiple spaces
-          args.push(...config.extra_args.trim().split(/\s+/));
+          baseArgs.push(...config.extra_args.trim().split(/\s+/));
         }
       }
 
-      if (task.options.audioOnly) {
-        args.push("--extract-audio");
-        if (task.options.audioFormat) {
-          args.push("--audio-format", task.options.audioFormat);
-        }
-      }
+      const args = [...baseArgs, "--write-info-json"];
 
       if (task.options.sanitizeFilename) {
         args.push("--restrict-filenames");
@@ -583,6 +694,23 @@ class QueueManager {
       } else if (task.options.format) {
         // If audioOnly but they specified a format (like bestaudio/best)
         args.push("-f", task.options.format);
+        baseArgs.push("-f", task.options.format);
+      }
+
+      if (task.options.audioOnly) {
+        args.push("--extract-audio");
+        if (task.options.audioFormat) {
+          args.push("--audio-format", task.options.audioFormat);
+
+          const audioQuality = this.resolveLossyAudioQuality(
+            task,
+            ytDlpPath,
+            baseArgs,
+          );
+          if (audioQuality) {
+            args.push("--audio-quality", audioQuality);
+          }
+        }
       }
 
       if (task.options.embedMetadata) args.push("--embed-metadata");
@@ -634,7 +762,7 @@ class QueueManager {
         );
       }
 
-      const process = spawn(config.yt_dlp_path || "yt-dlp", args);
+      const process = spawn(ytDlpPath, args);
       this.activeProcess = process;
 
       process.stdout.on("data", (data: Buffer) => {

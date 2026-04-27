@@ -1,5 +1,4 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest
-FROM $BUILD_FROM
+FROM ghcr.io/home-assistant/base:3.23
 
 # Install requirements
 RUN apk add --no-cache \
@@ -38,3 +37,9 @@ COPY run.sh /
 RUN chmod a+x /run.sh
 
 CMD [ "/run.sh" ]
+
+LABEL \
+    org.opencontainers.image.title="yt-dlp frontend" \
+    org.opencontainers.image.description="Simple frontend for yt-dlp." \
+    org.opencontainers.image.source="https://github.com/matthewturk/yt-dlp-webui" \
+    org.opencontainers.image.licenses="Apache License 2.0"
