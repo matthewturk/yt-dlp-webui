@@ -1,6 +1,6 @@
 #!/usr/bin/with-contenv bashio
 
-bashio::log.info "Starting yt-dlp WebUI (v1.0.33)..."
+bashio::log.info "Starting yt-dlp WebUI (v1.2.0)..."
 
 # Debug information
 bashio::log.info "Deno version: $(deno --version | head -n 1 || echo 'Not found')"
@@ -18,6 +18,7 @@ fi
 YT_DLP_PATH=$(bashio::config 'yt_dlp_path' 'yt-dlp')
 HISTORY_PATH=$(bashio::config 'history_path' '/data/history.json')
 EXTRA_ARGS=$(bashio::config 'extra_args' '')
+COOKIES_PATH=$(bashio::config 'cookies_path' '/share/yt-dlp-webui/cookies.txt')
 AUTO_UPDATE=$(bashio::config 'auto_update' 'true')
 
 if [ "$AUTO_UPDATE" = "true" ]; then
@@ -48,17 +49,33 @@ fi
 
 bashio::log.info "Normalized locations: $LOCATIONS_JSON"
 
+# Ensure cookies directory exists
+COOKIES_DIR=$(dirname "$COOKIES_PATH")
+COOKIES_SITES_DIR="${COOKIES_DIR}/cookies"
+if [ ! -d "$COOKIES_SITES_DIR" ]; then
+    mkdir -p "$COOKIES_SITES_DIR"
+    bashio::log.info "Created per-site cookies directory: $COOKIES_SITES_DIR"
+fi
+
+if [ -f "$COOKIES_PATH" ]; then
+    bashio::log.info "Cookie jar found at $COOKIES_PATH"
+else
+    bashio::log.info "No cookie jar found at $COOKIES_PATH (optional)"
+fi
+
 # Construct the final config file
 jq -n \
   --arg yt_dlp "$YT_DLP_PATH" \
   --arg hist "$HISTORY_PATH" \
   --argjson locs "$LOCATIONS_JSON" \
   --arg extra "$EXTRA_ARGS" \
+  --arg cookies "$COOKIES_PATH" \
   '{
     yt_dlp_path: $yt_dlp,
     history_path: $hist,
     allowed_locations: $locs,
-    extra_args: $extra
+    extra_args: $extra,
+    cookies_path: $cookies
   }' > /app/webui_config.json
 
 bashio::log.info "Configuration file created at /app/webui_config.json"

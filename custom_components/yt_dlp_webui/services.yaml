@@ -17,3 +17,11 @@ download:
       description: "Whether to force re-download even if already in history."
       example: true
       default: false
+    username:
+      description: "Username for sites that require authentication. Passed directly to yt-dlp, never stored on disk."
+      example: "myuser"
+      required: false
+    password:
+      description: "Password for sites that require authentication. Passed directly to yt-dlp, never stored on disk."
+      example: "mypassword"
+      required: false

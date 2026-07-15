@@ -26,6 +26,8 @@ ATTR_URL = "url"
 ATTR_LOCATION = "location"
 ATTR_AUDIO_ONLY = "audio_only"
 ATTR_FORCE = "force"
+ATTR_USERNAME = "username"
+ATTR_PASSWORD = "password"
 
 SERVICE_DOWNLOAD_SCHEMA = vol.Schema(
     {
@@ -33,6 +35,8 @@ SERVICE_DOWNLOAD_SCHEMA = vol.Schema(
         vol.Optional(ATTR_LOCATION): cv.string,
         vol.Optional(ATTR_AUDIO_ONLY, default=False): cv.boolean,
         vol.Optional(ATTR_FORCE, default=False): cv.boolean,
+        vol.Optional(ATTR_USERNAME): cv.string,
+        vol.Optional(ATTR_PASSWORD): cv.string,
     }
 )
 
@@ -56,6 +60,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         location = call.data.get(ATTR_LOCATION)
         audio_only = call.data.get(ATTR_AUDIO_ONLY)
         force = call.data.get(ATTR_FORCE)
+        username = call.data.get(ATTR_USERNAME)
+        password = call.data.get(ATTR_PASSWORD)
 
         payload = {
             "urls": [url],
@@ -66,6 +72,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 "advanced": True,
             },
         }
+
+        # Only include credentials if provided (never log them)
+        if username:
+            payload["options"]["username"] = username
+        if password:
+            payload["options"]["password"] = password
 
         async with aiohttp.ClientSession() as session:
             try:

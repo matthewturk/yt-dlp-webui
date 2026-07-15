@@ -20,6 +20,9 @@ const DownloadSchema = z.object({
     embedMetadata: z.boolean().optional(),
     enhancedAudioMetadata: z.boolean().optional(),
     embedThumbnail: z.boolean().optional(),
+    embedSubtitles: z.boolean().optional(),
+    subLanguage: z.string().optional(),
+    embedChapters: z.boolean().optional(),
     outputNameMode: z.enum(["default", "custom_title"]).optional(),
     outputName: z.string().optional(),
     sanitizeFilename: z.boolean().optional(),
@@ -27,6 +30,9 @@ const DownloadSchema = z.object({
     advanced: z.boolean().optional(),
     force: z.boolean().optional(),
     alsoDownloadAudio: z.boolean().optional(),
+    username: z.string().optional(),
+    password: z.string().optional(),
+    cookiesPath: z.string().optional(),
   }),
 });
 

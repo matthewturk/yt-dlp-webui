@@ -26,6 +26,12 @@
     ChevronDown,
     ChevronUp,
     Terminal,
+    Key,
+    Shield,
+    Subtitles,
+    BookOpen,
+    FileJson,
+    Upload,
   } from "lucide-svelte";
 
   const toastStore = getToastStore();
@@ -41,6 +47,9 @@
   let embedMetadata = true;
   let enhancedAudioMetadata = true;
   let embedThumbnail = true;
+  let embedSubtitles = false;
+  let subLanguage = "en";
+  let embedChapters = false;
   let outputNameMode: "default" | "custom_title" = "default";
   let outputName = "";
   let sanitizeFilename = true;
@@ -55,6 +64,22 @@
   let showLogs = false;
   let showPendingModal = false;
   let showBacklogModal = false;
+  let showCookieModal = false;
+  let showAuthSection = false;
+
+  let username = "";
+  let password = "";
+
+  let cookieSites: Array<{
+    domain: string;
+    size: number;
+    lastModified: string;
+  }> = [];
+  let cookieTab: "upload" | "paste" = "upload";
+  let cookieUploadFile: FileList | null = null;
+  let cookiePasteDomain = "";
+  let cookiePasteString = "";
+  let cookieUploading = false;
 
   let queue: any = { active: null, pending: [], completed: [] };
   let detailedQueue: any = {
@@ -91,6 +116,7 @@
       console.error("Failed to load locations", e);
     }
 
+    fetchCookieSites();
     fetchQueue();
     pollInterval = setInterval(fetchQueue, 2000);
   });
@@ -105,8 +131,16 @@
   $: absPodcastModeEnabled = absMode && audioOnly;
 
   $: if (absPodcastModeEnabled) {
-    // Playlist output structure is ignored in ABS mode.
     isPlaylist = false;
+  }
+
+  // Reset stale dependent states when parent toggles change
+  $: if (audioOnly) {
+    alsoDownloadAudio = false;
+  }
+
+  $: if (!audioOnly) {
+    absMode = false;
   }
 
   function useStableBaseNameSuggestion(name: string) {
@@ -133,6 +167,114 @@
       detailedQueue = await response.json();
     } catch (e) {
       console.error("Failed to fetch detailed queue", e);
+    }
+  }
+
+  async function fetchCookieSites() {
+    try {
+      const response = await fetch("api/config/cookies");
+      const data = await response.json();
+      cookieSites = data.sites || [];
+    } catch (e) {
+      console.error("Failed to fetch cookie sites", e);
+    }
+  }
+
+  async function uploadSiteCookies() {
+    if (!cookieUploadFile || cookieUploadFile.length === 0) return;
+    cookieUploading = true;
+    try {
+      const formData = new FormData();
+      formData.append("file", cookieUploadFile[0]);
+      if (cookiePasteDomain) {
+        formData.append("domain", cookiePasteDomain);
+      }
+      const response = await fetch("api/config/cookies", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toastStore.trigger({
+          message: `Cookies saved for ${data.domain}`,
+          background: "variant-filled-success",
+        });
+        cookieUploadFile = null;
+        cookiePasteDomain = "";
+        fetchCookieSites();
+      } else {
+        toastStore.trigger({
+          message: data.error || "Failed to upload cookies",
+          background: "variant-filled-error",
+        });
+      }
+    } catch (e) {
+      toastStore.trigger({
+        message: "Failed to connect to server",
+        background: "variant-filled-error",
+      });
+    } finally {
+      cookieUploading = false;
+    }
+  }
+
+  async function pasteSiteCookies() {
+    if (!cookiePasteString.trim() || !cookiePasteDomain.trim()) return;
+    cookieUploading = true;
+    try {
+      const response = await fetch("api/config/cookies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domain: cookiePasteDomain,
+          cookieString: cookiePasteString,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toastStore.trigger({
+          message: `Cookies saved for ${data.domain}`,
+          background: "variant-filled-success",
+        });
+        cookiePasteString = "";
+        cookiePasteDomain = "";
+        fetchCookieSites();
+      } else {
+        toastStore.trigger({
+          message: data.error || "Failed to save cookies",
+          background: "variant-filled-error",
+        });
+      }
+    } catch (e) {
+      toastStore.trigger({
+        message: "Failed to connect to server",
+        background: "variant-filled-error",
+      });
+    } finally {
+      cookieUploading = false;
+    }
+  }
+
+  async function deleteSiteCookies(domain: string) {
+    try {
+      const response = await fetch("api/config/cookies/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toastStore.trigger({
+          message: `Cookies removed for ${domain}`,
+          background: "variant-filled-surface",
+        });
+        fetchCookieSites();
+      }
+    } catch (e) {
+      toastStore.trigger({
+        message: "Failed to delete cookies",
+        background: "variant-filled-error",
+      });
     }
   }
 
@@ -168,12 +310,17 @@
             embedMetadata,
             enhancedAudioMetadata,
             embedThumbnail,
+            embedSubtitles,
+            subLanguage: embedSubtitles ? subLanguage : undefined,
+            embedChapters,
             outputNameMode,
             outputName,
             sanitizeFilename,
             absMode,
             force,
             alsoDownloadAudio,
+            username: username || undefined,
+            password: password || undefined,
             advanced: true,
           },
         }),
@@ -182,6 +329,9 @@
       const data = await response.json();
       if (response.ok) {
         urlInput = "";
+        // Clear credentials after successful submission
+        username = "";
+        password = "";
         const t: ToastSettings = {
           message: `Successfully queued ${urls.length} download(s)`,
           background: "variant-filled-success",
@@ -246,6 +396,11 @@
   async function openBacklogModal() {
     await fetchDetailedQueue();
     showBacklogModal = true;
+  }
+
+  function parseProgress(progress: string): number {
+    const val = parseFloat(progress);
+    return Number.isFinite(val) ? val : 0;
   }
 </script>
 
@@ -426,6 +581,44 @@
                         <span>Embed Thumbnail</span>
                       </span>
                     </label>
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                      <input
+                        class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-primary-500 focus:ring-primary-500"
+                        type="checkbox"
+                        bind:checked={embedSubtitles}
+                      />
+                      <span class="flex items-center space-x-2">
+                        <Subtitles size={16} />
+                        <span>Embed Subtitles</span>
+                      </span>
+                    </label>
+                    {#if embedSubtitles}
+                      <label class="label pl-7">
+                        <span class="text-xs opacity-60"
+                          >Subtitle Language(s)</span
+                        >
+                        <input
+                          class="input input-sm"
+                          type="text"
+                          bind:value={subLanguage}
+                          placeholder="en, es, fr (comma-separated)"
+                        />
+                        <span class="text-[10px] opacity-60"
+                          >Use language codes. "all" for all available.</span
+                        >
+                      </label>
+                    {/if}
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                      <input
+                        class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-primary-500 focus:ring-primary-500"
+                        type="checkbox"
+                        bind:checked={embedChapters}
+                      />
+                      <span class="flex items-center space-x-2">
+                        <BookOpen size={16} />
+                        <span>Embed Chapters</span>
+                      </span>
+                    </label>
                   </div>
                 </div>
 
@@ -449,58 +642,67 @@
                   </label>
 
                   <label class="label">
-                    <span class="text-xs opacity-60">Format Selection</span>
+                    <span class="text-xs opacity-60">Format Preference</span>
                     <select class="select" bind:value={format}>
-                      <option value="">Default (Best)</option>
-                      <option value="bestvideo+bestaudio/best"
-                        >Best Video + Best Audio</option
+                      <option value="">Automatic (Best Quality)</option>
+                      <option value="mp4_compatible"
+                        >MP4 — H.264 (Most Compatible)</option
                       >
-                      <option value="bestaudio/best">Best Audio Only</option>
-                      <option value="mp4">MP4</option>
-                      <option value="webm">WebM</option>
+                      <option value="webm_efficient"
+                        >WebM — VP9 (Smaller Files)</option
+                      >
+                      <option value="mkv_best"
+                        >MKV — Any Codec (High Quality)</option
+                      >
+                      <option value="premuxed"
+                        >Pre-muxed (Single File, No Muxing)</option
+                      >
                     </select>
                   </label>
                 </div>
 
-                <label class="label" class:opacity-50={absPodcastModeEnabled}>
-                  <span class="text-xs opacity-60"
-                    >Custom Filename Template</span
-                  >
-                  <div class="space-y-2">
-                    <input
-                      class="input"
-                      type="text"
-                      bind:value={filename}
-                      placeholder="%(title)s.%(ext)s"
-                      disabled={absPodcastModeEnabled}
-                    />
-                    <div class="flex flex-wrap gap-2">
-                      {#each filenameSuggestions as suggestion}
-                        <button
-                          type="button"
-                          class="btn btn-xs variant-soft-primary"
-                          on:click={() => (filename = suggestion.value)}
-                          disabled={absPodcastModeEnabled}
-                        >
-                          {suggestion.label}
-                        </button>
-                      {/each}
+                {#if !absPodcastModeEnabled && outputNameMode !== "custom_title"}
+                  <label class="label">
+                    <span class="text-xs opacity-60"
+                      >Custom Filename Template</span
+                    >
+                    <div class="space-y-2">
+                      <input
+                        class="input"
+                        type="text"
+                        bind:value={filename}
+                        placeholder="%(title)s.%(ext)s"
+                      />
+                      <div class="flex flex-wrap gap-2">
+                        {#each filenameSuggestions as suggestion}
+                          <button
+                            type="button"
+                            class="btn btn-xs variant-soft-primary"
+                            on:click={() => (filename = suggestion.value)}
+                          >
+                            {suggestion.label}
+                          </button>
+                        {/each}
+                      </div>
                     </div>
-                    {#if absPodcastModeEnabled}
-                      <span class="text-[10px] opacity-60"
-                        >Ignored in ABS mode. Output naming is controlled by
-                        stable base name and episode title.</span
-                      >
-                    {/if}
-                  </div>
-                </label>
+                  </label>
+                {/if}
+
+                {#if absPodcastModeEnabled}
+                  <span class="text-[10px] opacity-60"
+                    >Filename template ignored in ABS mode. Output naming is
+                    controlled by stable base name and episode title.</span
+                  >
+                {/if}
 
                 <div class="divider opacity-10"></div>
 
                 <label class="label">
                   <span class="text-xs opacity-60">Output Name Control</span>
                   <select class="select" bind:value={outputNameMode}>
-                    <option value="default">Use Template/Default Naming</option>
+                    <option value="default"
+                      >Use Template/Default Naming</option
+                    >
                     <option value="custom_title"
                       >Set a Custom Base Name (safe + stable)</option
                     >
@@ -549,7 +751,7 @@
                       bind:value={outputName}
                       placeholder={absMode && audioOnly
                         ? "Podcast Show Name"
-                        : "Podcast Episode"}
+                        : "My Download"}
                       list={absMode && audioOnly
                         ? "abs-stable-base-name-options"
                         : undefined}
@@ -579,6 +781,228 @@
                     >Auto-strip difficult filename characters</span
                   >
                 </label>
+              </div>
+            </svelte:fragment>
+          </AccordionItem>
+        </Accordion>
+
+        <!-- Authentication & Cookies Section -->
+        <Accordion
+          class="card variant-soft-surface border border-surface-500/10 overflow-hidden"
+        >
+          <AccordionItem>
+            <svelte:fragment slot="lead"
+              ><Shield size={20} /></svelte:fragment
+            >
+            <svelte:fragment slot="summary">
+              <span class="font-bold">Authentication & Cookies</span>
+            </svelte:fragment>
+            <svelte:fragment slot="content">
+              <div class="space-y-6 pt-2">
+                <!-- Per-Site Cookie Management -->
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="flex items-center space-x-2 text-sm font-semibold">
+                      <FileJson size={16} />
+                      <span>Site Cookies</span>
+                    </span>
+                    <button
+                      class="btn btn-xs variant-soft-primary"
+                      on:click={() => (showCookieModal = true)}
+                    >
+                      How to Get Cookies
+                    </button>
+                  </div>
+
+                  <!-- Configured Sites List -->
+                  {#if cookieSites.length > 0}
+                    <div class="space-y-1">
+                      {#each cookieSites as site}
+                        <div
+                          class="card p-2 variant-soft-surface border border-surface-500/10 flex items-center justify-between"
+                        >
+                          <div class="flex items-center space-x-2 min-w-0">
+                            <CheckCircle2 size={14} class="text-success-500 flex-shrink-0" />
+                            <span class="text-xs font-medium truncate">{site.domain}</span>
+                            <span class="text-[10px] opacity-40 flex-shrink-0">
+                              {new Date(site.lastModified).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <button
+                            class="btn btn-xs variant-soft-error flex-shrink-0"
+                            on:click={() => deleteSiteCookies(site.domain)}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      {/each}
+                    </div>
+                  {:else}
+                    <div class="text-[10px] opacity-40">
+                      No site cookies configured. Add cookies below for private or
+                      age-restricted content.
+                    </div>
+                  {/if}
+
+                  <!-- Add Cookies: Tabs -->
+                  <div class="card variant-soft-surface border border-surface-500/10 overflow-hidden">
+                    <!-- Tab Headers -->
+                    <div class="flex border-b border-surface-500/10">
+                      <button
+                        class="flex-1 px-3 py-2 text-xs font-medium transition-colors"
+                        class:variant-soft-primary={cookieTab === "upload"}
+                        class:opacity-60={cookieTab !== "upload"}
+                        on:click={() => (cookieTab = "upload")}
+                      >
+                        <Upload size={12} class="inline mr-1" />
+                        Upload File
+                      </button>
+                      <button
+                        class="flex-1 px-3 py-2 text-xs font-medium transition-colors"
+                        class:variant-soft-primary={cookieTab === "paste"}
+                        class:opacity-60={cookieTab !== "paste"}
+                        on:click={() => (cookieTab = "paste")}
+                      >
+                        <Terminal size={12} class="inline mr-1" />
+                        Paste from Browser
+                      </button>
+                    </div>
+
+                    <!-- Tab Content -->
+                    <div class="p-3 space-y-3">
+                      {#if cookieTab === "upload"}
+                        <span class="text-[10px] opacity-60 block">
+                          Upload a cookies.txt file exported for a single site
+                          from a browser extension.
+                        </span>
+                        <label class="label">
+                          <span class="text-[10px] opacity-60"
+                            >Domain (auto-detected if omitted)</span
+                          >
+                          <input
+                            class="input input-sm"
+                            type="text"
+                            bind:value={cookiePasteDomain}
+                            placeholder="youtube.com"
+                          />
+                        </label>
+                        <div class="flex items-center gap-2">
+                          <input
+                            class="input input-sm flex-1"
+                            type="file"
+                            accept=".txt,.cookies"
+                            on:change={(e) =>
+                              (cookieUploadFile = e.currentTarget.files)}
+                          />
+                          <button
+                            class="btn btn-sm variant-filled-primary"
+                            on:click={uploadSiteCookies}
+                            disabled={cookieUploading ||
+                              !cookieUploadFile ||
+                              cookieUploadFile.length === 0}
+                          >
+                            {#if cookieUploading}
+                              <RefreshCw class="animate-spin mr-1" size={14} />
+                            {:else}
+                              <Upload size={14} class="mr-1" />
+                            {/if}
+                            Upload
+                          </button>
+                        </div>
+                      {:else}
+                        <span class="text-[10px] opacity-60 block">
+                          Open DevTools (F12) → Network tab → click any request
+                          to the site → copy the Cookie header value and paste
+                          below.
+                        </span>
+                        <label class="label">
+                          <span class="text-[10px] opacity-60">Domain</span>
+                          <input
+                            class="input input-sm"
+                            type="text"
+                            bind:value={cookiePasteDomain}
+                            placeholder="youtube.com"
+                          />
+                        </label>
+                        <label class="label">
+                          <span class="text-[10px] opacity-60"
+                            >Cookie Header Value</span
+                          >
+                          <textarea
+                            class="textarea text-xs"
+                            rows="3"
+                            bind:value={cookiePasteString}
+                            placeholder="SID=xxxx; HSID=xxxx; SSID=xxxx; APISID=xxxx"
+                          ></textarea>
+                        </label>
+                        <button
+                          class="btn btn-sm variant-filled-primary w-full"
+                          on:click={pasteSiteCookies}
+                          disabled={cookieUploading ||
+                            !cookiePasteString.trim() ||
+                            !cookiePasteDomain.trim()}
+                        >
+                          {#if cookieUploading}
+                            <RefreshCw class="animate-spin mr-1" size={14} />
+                          {:else}
+                            <CheckCircle2 size={14} class="mr-1" />
+                          {/if}
+                          Save Cookies
+                        </button>
+                      {/if}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="divider opacity-10"></div>
+
+                <!-- Username/Password -->
+                <div class="space-y-3">
+                  <button
+                    class="flex items-center space-x-2 text-sm font-semibold cursor-pointer hover:text-primary-400 transition-colors"
+                    on:click={() => (showAuthSection = !showAuthSection)}
+                  >
+                    <Key size={16} />
+                    <span>Site Credentials</span>
+                    {#if showAuthSection}
+                      <ChevronUp size={14} />
+                    {:else}
+                      <ChevronDown size={14} />
+                    {/if}
+                  </button>
+
+                  {#if showAuthSection}
+                    <div class="card p-3 variant-soft-surface border border-surface-500/10 space-y-3">
+                      <div
+                        class="card p-2 variant-soft-warning border border-warning-500/20 text-[10px] opacity-80"
+                      >
+                        Credentials are passed directly to yt-dlp and never
+                        stored on disk or in download history. They are cleared
+                        from the form after submitting.
+                      </div>
+                      <label class="label">
+                        <span class="text-xs opacity-60">Username</span>
+                        <input
+                          class="input input-sm"
+                          type="text"
+                          bind:value={username}
+                          placeholder="Optional"
+                          autocomplete="off"
+                        />
+                      </label>
+                      <label class="label">
+                        <span class="text-xs opacity-60">Password</span>
+                        <input
+                          class="input input-sm"
+                          type="password"
+                          bind:value={password}
+                          placeholder="Optional"
+                          autocomplete="off"
+                        />
+                      </label>
+                    </div>
+                  {/if}
+                </div>
               </div>
             </svelte:fragment>
           </AccordionItem>
@@ -644,7 +1068,7 @@
             </div>
           </div>
           <ProgressBar
-            value={parseFloat(queue.active.progress)}
+            value={parseProgress(queue.active.progress)}
             max={100}
             meter="variant-filled-secondary"
             track="variant-soft-secondary"
@@ -923,8 +1347,145 @@
   </div>
 {/if}
 
+{#if showCookieModal}
+  <button
+    type="button"
+    aria-label="Close cookie instructions"
+    class="fixed inset-0 bg-black/50 z-40"
+    on:click={() => (showCookieModal = false)}
+  ></button>
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      class="card w-full max-w-2xl max-h-[85vh] overflow-hidden border border-surface-500/20 shadow-2xl"
+    >
+      <header
+        class="p-4 border-b border-surface-500/20 flex items-center justify-between"
+      >
+        <h4 class="h4 flex items-center space-x-2">
+          <FileJson size={20} />
+          <span>How to Get Site Cookies</span>
+        </h4>
+        <button
+          class="btn btn-xs variant-soft-surface"
+          on:click={() => (showCookieModal = false)}
+        >
+          Close
+        </button>
+      </header>
+      <div class="p-6 overflow-auto max-h-[70vh] space-y-5 text-sm">
+        <div class="space-y-2">
+          <h5 class="font-bold">Why use cookies?</h5>
+          <p class="opacity-80">
+            Some websites require authentication or have age restrictions. Cookies
+            let yt-dlp access content as if it were logged in to your browser.
+            You only need cookies for the specific sites you download from.
+          </p>
+        </div>
+
+        <div class="divider opacity-10"></div>
+
+        <div class="space-y-2">
+          <h5 class="font-bold">Method 1: Paste from DevTools (No Extension Needed)</h5>
+          <ol class="list-decimal list-inside space-y-2 opacity-80">
+            <li>
+              Open the website (e.g., YouTube) in your browser and log in.
+            </li>
+            <li>
+              Open DevTools with <kbd class="kbd kbd-xs">F12</kbd> or
+              <kbd class="kbd kbd-xs">Ctrl+Shift+I</kbd>.
+            </li>
+            <li>
+              Go to the <strong>Network</strong> tab, then click any request to
+              the site.
+            </li>
+            <li>
+              In the request headers, find <code class="variant-soft-surface px-1 rounded">Cookie</code>
+              and copy its entire value.
+            </li>
+            <li>
+              In the WebUI, go to Authentication & Cookies → Paste from Browser,
+              enter the domain, and paste the cookie value.
+            </li>
+          </ol>
+          <div class="card p-2 variant-soft-surface border border-surface-500/10 text-xs opacity-70">
+            <strong>Tip:</strong> For YouTube, any request to
+            <code>youtube.com</code> or <code>googlevideo.com</code> works.
+            The cookie value looks like
+            <code>SID=xxx; HSID=xxx; SSID=xxx; ...</code>
+          </div>
+        </div>
+
+        <div class="divider opacity-10"></div>
+
+        <div class="space-y-2">
+          <h5 class="font-bold">Method 2: Export from Browser Extension</h5>
+          <ol class="list-decimal list-inside space-y-2 opacity-80">
+            <li>
+              Install a browser extension:
+              <ul class="list-disc list-inside ml-4 mt-1 text-xs">
+                <li>
+                  <strong>Chrome/Edge:</strong> "Get cookies.txt LOCALLY"
+                </li>
+                <li>
+                  <strong>Firefox:</strong> "cookies.txt"
+                </li>
+              </ul>
+            </li>
+            <li>
+              Navigate to the target site (e.g., youtube.com).
+            </li>
+            <li>
+              Click the extension icon and export cookies for
+              <strong>just this site</strong> (not all sites).
+            </li>
+            <li>
+              Upload the small resulting file via the WebUI.
+            </li>
+          </ol>
+          <div class="card p-2 variant-soft-surface border border-surface-500/10 text-xs opacity-70">
+            <strong>Important:</strong> Export cookies for a single site only.
+            A full browser cookie export can be megabytes and slow to parse.
+            A single-site export is typically under 5KB.
+          </div>
+        </div>
+
+        <div class="divider opacity-10"></div>
+
+        <div class="space-y-2">
+          <h5 class="font-bold">Manual Placement (Home Assistant)</h5>
+          <p class="opacity-80 text-xs">
+            You can also place cookie files directly in
+            <code class="variant-soft-surface px-1 rounded"
+              >/share/yt-dlp-webui/cookies/</code
+            >. Name them <code>domain.txt</code> (e.g.,
+            <code>youtube.txt</code>). They'll be picked up automatically.
+          </p>
+        </div>
+
+        <div class="card p-3 variant-soft-warning border border-warning-500/20">
+          <p class="text-xs opacity-80">
+            <strong>Security note:</strong> Cookies contain session tokens that
+            grant access to your accounts. They are stored locally on this
+            device only and never transmitted to third parties. Credentials
+            (username/password fields) are never saved to disk.
+          </p>
+        </div>
+
+        <div class="card p-3 variant-soft-secondary border border-secondary-500/20">
+          <p class="text-xs opacity-80">
+            <strong>YouTube tip:</strong> For age-restricted content, log in to
+            YouTube in a <em>private/incognito window</em>, navigate to
+            <code class="variant-soft-surface px-1 rounded">youtube.com/robots.txt</code>,
+            then export cookies from that window. This avoids session rotation
+            that can invalidate exported cookies.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
-  /* Custom scrollbar for a cleaner look */
   ::-webkit-scrollbar {
     width: 6px;
   }

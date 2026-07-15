@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "child_process";
+import { randomUUID } from "crypto";
 import type { Buffer } from "buffer";
 import path from "path";
 import fs from "fs";
@@ -487,6 +488,11 @@ class QueueManager {
       format,
       timestamp: new Date().toISOString(),
     });
+    // Prune history to last 10000 entries to prevent unbounded growth
+    const maxHistory = 10000;
+    if (history.length > maxHistory) {
+      history.splice(0, history.length - maxHistory);
+    }
     fs.writeFileSync(this.getHistoryPath(), JSON.stringify(history, null, 2));
   }
 
@@ -499,7 +505,7 @@ class QueueManager {
 
   addTask(url: string, options: any) {
     const task: DownloadTask = {
-      id: Math.random().toString(36).substring(7),
+      id: randomUUID(),
       url,
       options,
       status: "queued",
@@ -555,18 +561,33 @@ class QueueManager {
         t.status === "cancelled",
     );
 
+    // Sanitize sensitive fields from task options before returning
+    const sanitizeTask = (task: DownloadTask) => ({
+      ...task,
+      options: this.sanitizeOptionsForDisplay(task.options),
+    });
+
     return {
-      active: this.activeTask,
-      pending,
+      active: this.activeTask ? sanitizeTask(this.activeTask) : null,
+      pending: pending.map(sanitizeTask),
       completed: includeAllCompleted
-        ? completedAll
-        : completedAll.slice(-completedLimit),
+        ? completedAll.map(sanitizeTask)
+        : completedAll.slice(-completedLimit).map(sanitizeTask),
       stats: {
         total: this.queue.length,
         queued: pending.length,
         completed: completedAll.length,
       },
     };
+  }
+
+  private sanitizeOptionsForDisplay(options: any) {
+    if (!options) return options;
+    const sanitized = { ...options };
+    // Remove credentials from display — never expose in API responses
+    delete sanitized.password;
+    delete sanitized.username;
+    return sanitized;
   }
 
   clearCompleted() {
@@ -625,6 +646,37 @@ class QueueManager {
     return options.format || "best";
   }
 
+  /**
+   * Build a yt-dlp format string from a preset key and optional max resolution.
+   * Resolution is always respected regardless of preset. Fallback chains ensure
+   * the download doesn't fail when the preferred container/codec isn't available.
+   */
+  private buildFormatString(
+    preset: string,
+    maxResolution: string,
+  ): string {
+    const h = maxResolution ? `[height<=?${maxResolution}]` : "";
+
+    switch (preset) {
+      case "mp4_compatible":
+        // Prefer H.264 in MP4 container with AAC audio, fallback to any MP4, then best
+        return `bestvideo${h}[ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo${h}[ext=mp4]+bestaudio/best`;
+      case "webm_efficient":
+        // Prefer VP9 in WebM container, fallback to any WebM, then best
+        return `bestvideo${h}[ext=webm][vcodec^=vp9]+bestaudio[ext=webm]/bestvideo${h}+bestaudio/best`;
+      case "mkv_best":
+        // Any codec muxed into MKV — just pick best streams and let yt-dlp mux
+        return `bestvideo${h}+bestaudio/best`;
+      case "premuxed":
+        // No muxing — pick the best single pre-muxed stream from the site
+        return `best${h}/best`;
+      case "auto":
+      default:
+        // Best streams, yt-dlp picks the container
+        return `bestvideo${h}+bestaudio/best`;
+    }
+  }
+
   private runDownload(task: DownloadTask): Promise<void> {
     return new Promise((resolve, reject) => {
       this.loadConfig(); // Refresh config in case it changed
@@ -673,28 +725,37 @@ class QueueManager {
 
       const args = [...baseArgs, "--write-info-json"];
 
+      // Cookie jar support
+      const cookiesPath =
+        task.options.cookiesPath || config.cookies_path || "";
+      if (cookiesPath && fs.existsSync(cookiesPath)) {
+        args.push("--cookies", cookiesPath);
+      }
+
+      // Username/password support (passed directly to yt-dlp, never logged)
+      if (task.options.username) {
+        args.push("--username", task.options.username);
+      }
+      if (task.options.password) {
+        args.push("--password", task.options.password);
+      }
+
       if (task.options.sanitizeFilename) {
         args.push("--restrict-filenames");
       }
 
       // Format selection logic
       if (!task.options.audioOnly) {
-        if (task.options.maxResolution) {
-          args.push(
-            "-f",
-            `bestvideo[height<=?${task.options.maxResolution}]+bestaudio/best`,
-          );
-        } else if (task.options.format) {
-          args.push("-f", task.options.format);
-        } else {
-          // Default to best video if neither resolution nor specific format is set
-          // This overrides any global -f flags in extra_args that might be audio-only
-          args.push("-f", "bestvideo+bestaudio/best");
-        }
+        args.push(
+          "-f",
+          this.buildFormatString(
+            task.options.format || "auto",
+            task.options.maxResolution || "",
+          ),
+        );
       } else if (task.options.format) {
         // If audioOnly but they specified a format (like bestaudio/best)
         args.push("-f", task.options.format);
-        baseArgs.push("-f", task.options.format);
       }
 
       if (task.options.audioOnly) {
@@ -715,6 +776,17 @@ class QueueManager {
 
       if (task.options.embedMetadata) args.push("--embed-metadata");
       if (task.options.embedThumbnail) args.push("--embed-thumbnail");
+
+      // Subtitle embedding
+      if (task.options.embedSubtitles) {
+        args.push("--write-subs", "--embed-subs");
+        if (task.options.subLanguage) {
+          args.push("--sub-langs", task.options.subLanguage);
+        }
+      }
+
+      // Chapter embedding
+      if (task.options.embedChapters) args.push("--embed-chapters");
 
       // Audiobookshelf podcast mode: write a separate thumbnail file so we can
       // promote it to cover.jpg in the show folder during post-processing.
@@ -771,7 +843,8 @@ class QueueManager {
         if (task.logs.length > 500) task.logs.shift(); // Keep logs manageable
 
         // Simple progress extraction: [download]  10.5% of 100.00MiB at 1.50MiB/s ETA 01:00
-        const match = line.match(/\[download\]\s+(\d+\.\d+)%/);
+        // Also handle integer percentages like [download] 100%
+        const match = line.match(/\[download\]\s+(\d+\.?\d*)%/);
         if (match) {
           task.progress = match[1] + "%";
         }
