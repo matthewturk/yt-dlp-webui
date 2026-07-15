@@ -21,7 +21,6 @@ EXTRA_ARGS=$(bashio::config 'extra_args' '')
 COOKIES_PATH=$(bashio::config 'cookies_path' '/share/yt-dlp-webui/cookies.txt')
 AUTO_UPDATE=$(bashio::config 'auto_update' 'true')
 PODCAST_FEEDS_PATH=$(bashio::config 'podcast_feeds_path' '/data/podcast_feeds.json')
-PODCAST_SCAN_DIRS=$(bashio::config 'podcast_scan_dirs' '[]')
 PODCAST_STAGING_DIR=$(bashio::config 'podcast_staging_dir' '/data/podcast-staging')
 
 if [ "$AUTO_UPDATE" = "true" ]; then
@@ -74,7 +73,6 @@ jq -n \
   --arg extra "$EXTRA_ARGS" \
   --arg cookies "$COOKIES_PATH" \
   --arg feeds "$PODCAST_FEEDS_PATH" \
-  --argjson scan "$PODCAST_SCAN_DIRS" \
   --arg staging "$PODCAST_STAGING_DIR" \
   '{
     yt_dlp_path: $yt_dlp,
@@ -83,7 +81,6 @@ jq -n \
     extra_args: $extra,
     cookies_path: $cookies,
     podcast_feeds_path: $feeds,
-    podcast_scan_dirs: $scan,
     podcast_staging_dir: $staging
   }' > /app/webui_config.json
 

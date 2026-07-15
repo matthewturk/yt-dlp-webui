@@ -339,53 +339,6 @@ class QueueManager {
     return tags.filter(([, value]) => value !== "");
   }
 
-  /**
-   * When absMode is active, yt-dlp writes thumbnail images alongside audio
-   * (e.g. "Show/Episode [id].jpg"). ABS reads a cover.jpg in the podcast
-   * folder as the show artwork. This promotes the first new image in each
-   * podcast subfolder to cover.jpg if one doesn't already exist.
-   */
-  private promoteCoverArt(
-    task: DownloadTask,
-    outputDir: string,
-    beforeFiles: string[],
-  ): void {
-    const imageExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
-    const afterFiles = this.listFilesRecursive(outputDir);
-    const beforeSet = new Set(beforeFiles);
-
-    // Collect new image files grouped by their parent directory.
-    const newImagesByDir = new Map<string, string[]>();
-    for (const file of afterFiles) {
-      if (
-        !beforeSet.has(file) &&
-        imageExtensions.has(path.extname(file).toLowerCase())
-      ) {
-        const dir = path.dirname(file);
-        if (!newImagesByDir.has(dir)) newImagesByDir.set(dir, []);
-        newImagesByDir.get(dir)!.push(file);
-      }
-    }
-
-    for (const [dir, images] of newImagesByDir) {
-      // Skip the root output dir itself — only act on podcast subfolders.
-      if (path.resolve(dir) === path.resolve(outputDir)) continue;
-
-      const coverPath = path.join(dir, "cover.jpg");
-      if (fs.existsSync(coverPath)) continue;
-
-      // Use the first new image as cover.jpg (copy so the source file is preserved
-      // in case ABS or other tools also reference it).
-      const source = images[0];
-      try {
-        fs.copyFileSync(source, coverPath);
-        task.logs.push(`abs: wrote cover.jpg from ${source}`);
-      } catch (err: any) {
-        task.logs.push(`abs: failed to write cover.jpg (${err?.message})`);
-      }
-    }
-  }
-
   private applyEnhancedAudioMetadata(
     task: DownloadTask,
     outputDir: string,
@@ -393,10 +346,6 @@ class QueueManager {
   ): void {
     if (!task.options.audioOnly || !task.options.embedMetadata) return;
     if (task.options.enhancedAudioMetadata === false) return;
-
-    if (task.options.absMode) {
-      this.promoteCoverArt(task, outputDir, beforeFiles);
-    }
 
     const afterFiles = this.listFilesRecursive(outputDir);
     const beforeSet = new Set(beforeFiles);
@@ -674,6 +623,11 @@ class QueueManager {
             task.status = "completed";
             task.progress = "100%";
             this.addToHistory(task.url, format);
+
+            // Auto-process for podcast feeds
+            if (task.feedId) {
+              this.autoProcessFeed(task.feedId);
+            }
           }
         })
         .catch((e: any) => {
@@ -687,6 +641,34 @@ class QueueManager {
           this.activeTasks.delete(task.id);
           this.processQueue();
         });
+    }
+  }
+
+  private async autoProcessFeed(feedId: string) {
+    try {
+      // Dynamic import to avoid circular dependency
+      const { podcastFeedManager } = await import("./podcast_feeds");
+      const { processFeedFiles, findCompletedUrls } = await import("./podcast_processor");
+
+      const feed = podcastFeedManager.getFeed(feedId);
+      if (!feed || !feed.autoProcess) return;
+
+      // Extract URLs from .info.json before processing (processor deletes them)
+      const searchDir = feed.processingDir || feed.destinationDir;
+      let preProcessUrls: string[] = [];
+      if (feed.urlListPath) {
+        const completedUrls = findCompletedUrls(searchDir);
+        preProcessUrls = Array.from(completedUrls);
+      }
+
+      processFeedFiles(feed);
+
+      // Mark completed URLs
+      if (feed.urlListPath && preProcessUrls.length > 0) {
+        podcastFeedManager.markUrlsDownloaded(feed.urlListPath, preProcessUrls);
+      }
+    } catch (e) {
+      console.error(`Auto-process failed for feed ${feedId}:`, e);
     }
   }
 
@@ -852,26 +834,17 @@ class QueueManager {
       // Chapter embedding
       if (task.options.embedChapters) args.push("--embed-chapters");
 
-      // Audiobookshelf podcast mode: write a separate thumbnail file so we can
-      // promote it to cover.jpg in the show folder during post-processing.
-      if (task.options.absMode) {
-        args.push("--write-thumbnail", "--convert-thumbnails", "jpg");
-      }
-
       let customName = "";
       if (task.options.outputNameMode === "custom_title") {
         customName = this.sanitizeFileNamePart(task.options.outputName || "");
       }
 
       if (task.options.absMode && task.options.audioOnly) {
-        // ABS podcast library: flat folder per show — no season subfolders.
-        // yt-dlp expands %(series,uploader,channel)s: tries series first, then
-        // uploader, then channel so the folder name is always the show name.
-        const showFolder = customName || "%(series,uploader,channel)s";
+        // ABS podcast library: files go directly into the destination directory.
         args.push("--no-playlist");
         args.push(
           "-o",
-          path.join(outputDir, `${showFolder}/%(title)s [%(id)s].%(ext)s`),
+          path.join(outputDir, `%(title)s [%(id)s].%(ext)s`),
         );
       } else if (task.options.isPlaylist) {
         args.push("--yes-playlist");

@@ -93,6 +93,9 @@
   let downloadStatus: any = null;
   let downloadLimit: number | null = 1;
 
+  let feedQueueTasks: any[] = [];
+  let pollQueueInterval: any;
+
   let pollInterval: any;
 
   onMount(() => {
@@ -105,6 +108,26 @@
   });
 
   $: selectedFeed = feeds.find((f) => f.id === selectedFeedId);
+
+  $: if (selectedFeedId) {
+    fetchFeedQueue();
+    if (pollQueueInterval) clearInterval(pollQueueInterval);
+    pollQueueInterval = setInterval(fetchFeedQueue, 3000);
+  } else {
+    feedQueueTasks = [];
+    if (pollQueueInterval) clearInterval(pollQueueInterval);
+  }
+
+  async function fetchFeedQueue() {
+    if (!selectedFeedId) { feedQueueTasks = []; return; }
+    try {
+      const res = await fetch(`${base}/api/queue`);
+      const data = await res.json();
+      const active = data.activeTasks || (data.active ? [data.active] : []);
+      const pending = data.pending || [];
+      feedQueueTasks = [...active, ...pending].filter((t: any) => t.feedId === selectedFeedId);
+    } catch {}
+  }
 
   async function fetchFeeds() {
     try {
@@ -377,6 +400,35 @@
       });
     } finally {
       markingDownloaded = false;
+    }
+  }
+
+  async function unmarkUrl(url: string) {
+    if (!selectedFeedId) return;
+    try {
+      const res = await fetch(`${base}/api/podcasts/${selectedFeedId}/unmark`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toastStore.trigger({
+          message: "URL unmarked — ready for re-download",
+          background: "variant-filled-success",
+        });
+        await loadFeedData(selectedFeedId);
+      } else {
+        toastStore.trigger({
+          message: data.error || "Failed to unmark",
+          background: "variant-filled-error",
+        });
+      }
+    } catch (e) {
+      toastStore.trigger({
+        message: "Failed to connect to server",
+        background: "variant-filled-error",
+      });
     }
   }
 
@@ -799,7 +851,7 @@
                 {#if urlDetailedList.length > 0}
                   <div class="space-y-1 max-h-[200px] overflow-y-auto">
                     {#each urlDetailedList as item}
-                      <div class="flex items-center gap-2 text-xs py-1 px-2 rounded"
+                      <div class="flex items-center gap-2 text-xs py-1 px-2 rounded group"
                         class:opacity-40={item.downloaded}
                         class:line-through={item.downloaded}
                       >
@@ -810,9 +862,18 @@
                         {:else}
                           <span class="w-3"></span>
                         {/if}
-                        <span class="truncate font-mono text-[10px]">
+                        <span class="truncate font-mono text-[10px] flex-1">
                           {item.url || item.line}
                         </span>
+                        {#if item.downloaded && item.url}
+                          <button
+                            class="btn btn-xs variant-soft-warning opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Unmark — allow re-download"
+                            on:click={() => unmarkUrl(item.url)}
+                          >
+                            <RefreshCw size={10} />
+                          </button>
+                        {/if}
                       </div>
                     {/each}
                   </div>
@@ -859,6 +920,46 @@
             </svelte:fragment>
           </AccordionItem>
         </Accordion>
+
+        <!-- Queue View -->
+        {#if feedQueueTasks.length > 0}
+          <div class="card p-4 variant-soft-surface border border-surface-500/10 mt-3">
+            <h4 class="font-bold text-sm mb-2">Queue ({feedQueueTasks.length})</h4>
+            <div class="space-y-1 max-h-[200px] overflow-y-auto">
+              {#each feedQueueTasks as task}
+                <div class="flex items-center gap-2 text-xs py-1 px-2 rounded">
+                  {#if task.status === "downloading"}
+                    <RefreshCw size={12} class="text-primary-500 animate-spin flex-shrink-0" />
+                  {:else if task.status === "completed"}
+                    <CheckCircle2 size={12} class="text-success-500 flex-shrink-0" />
+                  {:else if task.status === "failed"}
+                    <XCircle size={12} class="text-error-500 flex-shrink-0" />
+                  {:else}
+                    <Clock size={12} class="text-surface-400 flex-shrink-0" />
+                  {/if}
+                  <span class="truncate font-mono text-[10px] flex-1">{task.url}</span>
+                  <span class="text-[10px] opacity-50 flex-shrink-0">{task.progress}</span>
+                  {#if task.status === "queued" || task.status === "downloading"}
+                    <button
+                      class="btn btn-xs variant-soft-error flex-shrink-0"
+                      title="Cancel"
+                      on:click={async () => {
+                        await fetch(`${base}/api/queue/cancel`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id: task.id }),
+                        });
+                        fetchFeedQueue();
+                      }}
+                    >
+                      <X size={10} />
+                    </button>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
 
         <!-- Process Results -->
         {#if processResults}

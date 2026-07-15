@@ -276,6 +276,35 @@ class PodcastFeedManager {
     return marked;
   }
 
+  /**
+   * Unmark a URL as downloaded (remove the "# " prefix). Returns true if found and unmarked.
+   */
+  unmarkUrlDownloaded(urlListPath: string, url: string): boolean {
+    const resolved = path.resolve(urlListPath);
+    if (!fs.existsSync(resolved)) return false;
+
+    const content = fs.readFileSync(resolved, "utf-8");
+    const lines = content.split("\n");
+    let found = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (trimmed.startsWith("# ")) {
+        const inner = trimmed.slice(2).trim();
+        if (inner === url) {
+          lines[i] = url;
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if (found) {
+      fs.writeFileSync(resolved, lines.join("\n"), "utf-8");
+    }
+    return found;
+  }
+
   scanDirectories(): DiscoveredFile[] {
     const results: DiscoveredFile[] = [];
     const seen = new Set<string>();
