@@ -48,6 +48,8 @@
   let force = false;
   let alsoDownloadAudio = false;
   let locations: string[] = [];
+  let absStableBaseNamesByLocation: Record<string, string[]> = {};
+  let absStableBaseNameSuggestions: string[] = [];
   let loading = false;
   let error = "";
   let showLogs = false;
@@ -82,6 +84,9 @@
         locations = data.locations;
         locationName = locations[0];
       }
+      if (data.absStableBaseNamesByLocation) {
+        absStableBaseNamesByLocation = data.absStableBaseNamesByLocation;
+      }
     } catch (e) {
       console.error("Failed to load locations", e);
     }
@@ -93,6 +98,21 @@
   onDestroy(() => {
     if (pollInterval) clearInterval(pollInterval);
   });
+
+  $: absStableBaseNameSuggestions =
+    absStableBaseNamesByLocation[locationName] || [];
+
+  $: absPodcastModeEnabled = absMode && audioOnly;
+
+  $: if (absPodcastModeEnabled) {
+    // Playlist output structure is ignored in ABS mode.
+    isPlaylist = false;
+  }
+
+  function useStableBaseNameSuggestion(name: string) {
+    outputNameMode = "custom_title";
+    outputName = name;
+  }
 
   async function fetchQueue() {
     try {
@@ -260,11 +280,14 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <label
             class="card p-4 variant-soft-surface border border-surface-500/10 flex items-center space-x-4 cursor-pointer hover:variant-soft-primary transition-colors"
+            class:opacity-50={absPodcastModeEnabled}
+            class:pointer-events-none={absPodcastModeEnabled}
           >
             <input
               type="checkbox"
               class="form-checkbox w-5 h-5 rounded border-surface-500/30 bg-surface-50-900-token text-primary-500 focus:ring-primary-500"
               bind:checked={isPlaylist}
+              disabled={absPodcastModeEnabled}
             />
             <span class="text-sm font-medium">Playlist</span>
           </label>
@@ -439,7 +462,7 @@
                   </label>
                 </div>
 
-                <label class="label">
+                <label class="label" class:opacity-50={absPodcastModeEnabled}>
                   <span class="text-xs opacity-60"
                     >Custom Filename Template</span
                   >
@@ -449,6 +472,7 @@
                       type="text"
                       bind:value={filename}
                       placeholder="%(title)s.%(ext)s"
+                      disabled={absPodcastModeEnabled}
                     />
                     <div class="flex flex-wrap gap-2">
                       {#each filenameSuggestions as suggestion}
@@ -456,11 +480,18 @@
                           type="button"
                           class="btn btn-xs variant-soft-primary"
                           on:click={() => (filename = suggestion.value)}
+                          disabled={absPodcastModeEnabled}
                         >
                           {suggestion.label}
                         </button>
                       {/each}
                     </div>
+                    {#if absPodcastModeEnabled}
+                      <span class="text-[10px] opacity-60"
+                        >Ignored in ABS mode. Output naming is controlled by
+                        stable base name and episode title.</span
+                      >
+                    {/if}
                   </div>
                 </label>
 
@@ -476,18 +507,64 @@
                   </select>
                 </label>
 
+                {#if absMode && audioOnly}
+                  <div
+                    class="card p-3 variant-soft-surface border border-surface-500/10 space-y-2"
+                  >
+                    <span class="text-xs opacity-60 block"
+                      >Existing Stable Base Names in {locationName}</span
+                    >
+                    {#if absStableBaseNameSuggestions.length > 0}
+                      <div class="flex flex-wrap gap-2">
+                        {#each absStableBaseNameSuggestions as suggestion}
+                          <button
+                            type="button"
+                            class="btn btn-xs variant-soft-secondary"
+                            on:click={() =>
+                              useStableBaseNameSuggestion(suggestion)}
+                          >
+                            {suggestion}
+                          </button>
+                        {/each}
+                      </div>
+                    {:else}
+                      <span class="text-[10px] opacity-60"
+                        >No existing podcast folders found for this location
+                        yet.</span
+                      >
+                    {/if}
+                  </div>
+                {/if}
+
                 {#if outputNameMode === "custom_title"}
                   <label class="label">
-                    <span class="text-xs opacity-60">Custom Output Name</span>
+                    <span class="text-xs opacity-60"
+                      >{absMode && audioOnly
+                        ? "Stable Base Name"
+                        : "Custom Output Name"}</span
+                    >
                     <input
                       class="input"
                       type="text"
                       bind:value={outputName}
-                      placeholder="Podcast Episode"
+                      placeholder={absMode && audioOnly
+                        ? "Podcast Show Name"
+                        : "Podcast Episode"}
+                      list={absMode && audioOnly
+                        ? "abs-stable-base-name-options"
+                        : undefined}
                     />
+                    {#if absMode && audioOnly}
+                      <datalist id="abs-stable-base-name-options">
+                        {#each absStableBaseNameSuggestions as suggestion}
+                          <option value={suggestion}></option>
+                        {/each}
+                      </datalist>
+                    {/if}
                     <span class="text-[10px] opacity-60"
-                      >Files will append the source ID automatically to avoid
-                      collisions.</span
+                      >{absMode && audioOnly
+                        ? "Select an existing show folder or type a new one. Files append source ID automatically to avoid collisions."
+                        : "Files will append the source ID automatically to avoid collisions."}</span
                     >
                   </label>
                 {/if}

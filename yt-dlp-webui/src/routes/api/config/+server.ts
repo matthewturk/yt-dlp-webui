@@ -2,6 +2,21 @@ import { json } from "@sveltejs/kit";
 import fs from "fs";
 import path from "path";
 
+function listImmediateSubdirectories(dirPath: string): string[] {
+  if (!dirPath || !fs.existsSync(dirPath)) return [];
+
+  try {
+    return fs
+      .readdirSync(dirPath, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b));
+  } catch (error) {
+    console.error(`Failed to read subdirectories for ${dirPath}:`, error);
+    return [];
+  }
+}
+
 export async function GET() {
   try {
     let configPath = path.resolve("webui_config.json");
@@ -43,20 +58,33 @@ export async function GET() {
       }
     }
 
-    // Only return names of valid objects to the frontend
-    const locations = (rawLocations || [])
+    // Normalize location objects for frontend usage.
+    const normalizedLocations = (rawLocations || [])
       .filter((loc: any) => typeof loc === "object" && loc !== null)
-      .map((loc: any) => loc.name || loc.path || "Unknown");
+      .map((loc: any) => ({
+        name: loc.name || loc.path || "Unknown",
+        path: loc.path || "",
+      }));
+
+    const locations = normalizedLocations.map((loc: any) => loc.name);
+    const absStableBaseNamesByLocation: Record<string, string[]> = {};
+
+    for (const loc of normalizedLocations) {
+      absStableBaseNamesByLocation[loc.name] = listImmediateSubdirectories(
+        loc.path,
+      );
+    }
 
     if (locations.length === 0) {
       locations.push("Default (local)");
     }
 
-    return json({ locations });
+    return json({ locations, absStableBaseNamesByLocation });
   } catch (e) {
     console.error("Config API Error:", e);
     return json({
       locations: ["Default (local)"],
+      absStableBaseNamesByLocation: {},
       error: "Using fallback config",
     });
   }
