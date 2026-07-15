@@ -42,6 +42,7 @@
     csvPath: string;
     urlListPath: string;
     destinationDir: string;
+    processingDir: string;
     concurrency: number;
     downloadOptions: {
       audioOnly: boolean;
@@ -90,6 +91,7 @@
 
   let downloading = false;
   let downloadStatus: any = null;
+  let downloadLimit: number | null = 1;
 
   let pollInterval: any;
 
@@ -121,7 +123,8 @@
       csvPath: "",
       urlListPath: "",
       destinationDir: "",
-      concurrency: 2,
+      processingDir: "",
+      concurrency: 1,
       downloadOptions: {
         audioOnly: true,
         audioFormat: "m4a",
@@ -289,7 +292,7 @@
       const res = await fetch(`${base}/api/podcasts/${selectedFeedId}/download`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ limit: downloadLimit }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -674,18 +677,29 @@
             <button class="btn btn-sm variant-soft-primary" on:click={() => editFeed(selectedFeed)}>
               <Edit3 size={14} /> Edit
             </button>
-            <button
-              class="btn btn-sm variant-filled-success"
-              on:click={startDownload}
-              disabled={downloading || urlList.length === 0}
-            >
-              {#if downloading}
-                <RefreshCw size={14} class="animate-spin" />
-              {:else}
-                <Download size={14} />
-              {/if}
-              Download ({urlList.length} URLs)
-            </button>
+            <div class="flex items-center gap-1">
+              <input
+                class="input w-16 text-xs text-center"
+                type="number"
+                min="1"
+                max={urlList.length}
+                placeholder="all"
+                bind:value={downloadLimit}
+                title="Limit (leave empty for all)"
+              />
+              <button
+                class="btn btn-sm variant-filled-success"
+                on:click={startDownload}
+                disabled={downloading || urlList.length === 0}
+              >
+                {#if downloading}
+                  <RefreshCw size={14} class="animate-spin" />
+                {:else}
+                  <Download size={14} />
+                {/if}
+                Download ({downloadLimit ? Math.min(downloadLimit, urlList.length) : urlList.length})
+              </button>
+            </div>
             <button
               class="btn btn-sm variant-filled-warning"
               on:click={processFeed}

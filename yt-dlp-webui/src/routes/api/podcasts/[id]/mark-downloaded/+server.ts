@@ -1,16 +1,16 @@
 import { json } from "@sveltejs/kit";
 import { podcastFeedManager } from "$lib/server/podcast_feeds";
-import { findCompletedMediaUrls } from "$lib/server/podcast_processor";
+import { findCompletedUrls } from "$lib/server/podcast_processor";
 
 /**
  * POST /api/podcasts/:id/mark-downloaded
  *
- * Scans the destination directory for completed media files and marks
+ * Scans the processing directory for .info.json files and marks
  * their corresponding URLs in the URL list file as downloaded (prepends `# `).
  * Non-destructive — comments preserve the original URLs.
  *
  * Body: { urls?: string[] } — optional specific URLs to mark.
- *       If omitted, scans the destination directory automatically.
+ *       If omitted, scans the processing directory automatically.
  */
 export async function POST({ params, request }) {
   const feed = podcastFeedManager.getFeed(params.id);
@@ -26,11 +26,14 @@ export async function POST({ params, request }) {
 
   if (body.urls && Array.isArray(body.urls) && body.urls.length > 0) {
     urlsToMark = body.urls;
-  } else if (feed.destinationDir) {
-    const completedUrls = findCompletedMediaUrls(feed.destinationDir);
-    urlsToMark = Array.from(completedUrls);
   } else {
-    return json({ error: "No destination directory or URLs specified" }, { status: 400 });
+    // Scan processingDir (where .info.json files live from downloads)
+    const scanDir = feed.processingDir || feed.destinationDir;
+    if (!scanDir) {
+      return json({ error: "No processing directory or URLs specified" }, { status: 400 });
+    }
+    const completedUrls = findCompletedUrls(scanDir);
+    urlsToMark = Array.from(completedUrls);
   }
 
   if (urlsToMark.length === 0) {

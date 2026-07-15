@@ -23,12 +23,21 @@ export async function POST({ params, request }) {
     urls = urls.filter((u) => selectedUrls.includes(u));
   }
 
+  // Limit how many URLs to queue
+  const limit = body.limit;
+  if (typeof limit === "number" && limit > 0) {
+    urls = urls.slice(0, limit);
+  }
+
   if (urls.length === 0) {
     return json({ error: "No URLs to download" }, { status: 400 });
   }
 
   // Set concurrency on the queue manager
   queueManager.setMaxConcurrent(feed.concurrency);
+
+  // Use processingDir for staging; if not set, fall back to destinationDir
+  const downloadDir = feed.processingDir || feed.destinationDir;
 
   const downloadOptions = {
     audioOnly: feed.downloadOptions.audioOnly,
@@ -39,7 +48,7 @@ export async function POST({ params, request }) {
     absMode: feed.downloadOptions.absMode,
     sanitizeFilename: feed.downloadOptions.sanitizeFilename,
     locationName: undefined,
-    outputDir: feed.destinationDir,
+    outputDir: downloadDir,
     outputNameMode: "custom_title" as const,
     outputName: feed.name,
     force: body.force || false,

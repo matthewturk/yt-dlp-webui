@@ -21,6 +21,7 @@ export interface PodcastFeed {
   csvPath: string;
   urlListPath: string;
   destinationDir: string;
+  processingDir: string;
   concurrency: number;
   downloadOptions: PodcastFeedDownloadOptions;
   autoProcess: boolean;
@@ -32,6 +33,7 @@ export interface PodcastFeed {
 export interface PodcastFeedsConfig {
   podcast_scan_dirs: string[];
   podcast_feeds_path: string;
+  podcast_staging_dir: string;
 }
 
 export interface DiscoveredFile {
@@ -57,8 +59,9 @@ const DEFAULT_DOWNLOAD_OPTIONS: PodcastFeedDownloadOptions = {
 
 class PodcastFeedManager {
   private feeds: PodcastFeed[] = [];
-  private feedsPath: string = "podcast_feeds.json";
+  private feedsPath: string = "/data/podcast_feeds.json";
   private scanDirs: string[] = [];
+  private stagingDir: string = "/data/podcast-staging";
 
   constructor() {
     this.loadConfig();
@@ -69,7 +72,8 @@ class PodcastFeedManager {
     const configPath = path.resolve("webui_config.json");
     const defaultConfig: PodcastFeedsConfig = {
       podcast_scan_dirs: [],
-      podcast_feeds_path: "podcast_feeds.json",
+      podcast_feeds_path: "/data/podcast_feeds.json",
+      podcast_staging_dir: "/data/podcast-staging",
     };
 
     if (fs.existsSync(configPath)) {
@@ -77,6 +81,7 @@ class PodcastFeedManager {
         const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
         this.scanDirs = data.podcast_scan_dirs || defaultConfig.podcast_scan_dirs;
         this.feedsPath = data.podcast_feeds_path || defaultConfig.podcast_feeds_path;
+        this.stagingDir = data.podcast_staging_dir || defaultConfig.podcast_staging_dir;
       } catch (e) {
         console.error("Error reading config for podcast feeds:", e);
         this.scanDirs = defaultConfig.podcast_scan_dirs;
@@ -112,8 +117,10 @@ class PodcastFeedManager {
   createFeed(
     data: Omit<PodcastFeed, "id" | "createdAt" | "updatedAt">,
   ): PodcastFeed {
+    const processingDir = data.processingDir || path.join(this.stagingDir, data.name || "unnamed");
     const feed: PodcastFeed = {
       ...data,
+      processingDir,
       id: randomUUID(),
       downloadOptions: { ...DEFAULT_DOWNLOAD_OPTIONS, ...data.downloadOptions },
       createdAt: new Date().toISOString(),
@@ -127,6 +134,11 @@ class PodcastFeedManager {
   updateFeed(id: string, data: Partial<PodcastFeed>): PodcastFeed | null {
     const index = this.feeds.findIndex((f) => f.id === id);
     if (index === -1) return null;
+
+    // Auto-update processingDir when name changes
+    if (data.name && data.name !== this.feeds[index].name) {
+      data.processingDir = path.join(this.stagingDir, data.name);
+    }
 
     this.feeds[index] = {
       ...this.feeds[index],

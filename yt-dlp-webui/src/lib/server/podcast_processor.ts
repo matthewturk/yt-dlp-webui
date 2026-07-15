@@ -264,7 +264,9 @@ export function processFeedFiles(
   const results: ProcessResult[] = [];
   const csvEpisodes = feed.csvPath ? loadCsvData(feed.csvPath) : [];
 
-  const searchDir = feed.destinationDir;
+  // Search processingDir for staged downloads; fall back to destinationDir
+  const searchDir = feed.processingDir || feed.destinationDir;
+  const finalDir = feed.destinationDir;
   if (!fs.existsSync(searchDir)) {
     fs.mkdirSync(searchDir, { recursive: true });
   }
@@ -343,6 +345,18 @@ export function processFeedFiles(
         fs.unlinkSync(mediaFile);
         fs.unlinkSync(infoPath);
         fs.renameSync(tempFilename, targetFilename);
+
+        // If processingDir is separate, move the finished file to destinationDir
+        if (feed.processingDir && feed.processingDir !== feed.destinationDir) {
+          const relFromProcessing = path.relative(searchDir, path.dirname(targetFilename));
+          const destSubdir = path.join(finalDir, relFromProcessing);
+          if (!fs.existsSync(destSubdir)) fs.mkdirSync(destSubdir, { recursive: true });
+          const destFile = path.join(destSubdir, path.basename(targetFilename));
+          if (!fs.existsSync(destFile)) {
+            fs.renameSync(targetFilename, destFile);
+          }
+        }
+
         results.push({
           file: infoPath,
           status: "processed",

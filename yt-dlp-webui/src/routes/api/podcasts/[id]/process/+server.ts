@@ -1,6 +1,6 @@
 import { json } from "@sveltejs/kit";
 import { podcastFeedManager } from "$lib/server/podcast_feeds";
-import { processFeedFiles, findCompletedMediaUrls } from "$lib/server/podcast_processor";
+import { processFeedFiles, findCompletedUrls } from "$lib/server/podcast_processor";
 
 export async function POST({ params }) {
   const feed = podcastFeedManager.getFeed(params.id);
@@ -8,6 +8,14 @@ export async function POST({ params }) {
 
   if (!feed.destinationDir) {
     return json({ error: "No destination directory configured" }, { status: 400 });
+  }
+
+  // Extract URLs from .info.json BEFORE processing (processor deletes them)
+  const searchDir = feed.processingDir || feed.destinationDir;
+  let preProcessUrls: string[] = [];
+  if (feed.urlListPath) {
+    const completedUrls = findCompletedUrls(searchDir);
+    preProcessUrls = Array.from(completedUrls);
   }
 
   const results = processFeedFiles(feed);
@@ -21,14 +29,11 @@ export async function POST({ params }) {
 
   // Mark completed URLs in the URL list file
   let urlsMarked = 0;
-  if (feed.urlListPath) {
-    const completedUrls = findCompletedMediaUrls(feed.destinationDir);
-    if (completedUrls.size > 0) {
-      urlsMarked = podcastFeedManager.markUrlsDownloaded(
-        feed.urlListPath,
-        Array.from(completedUrls),
-      );
-    }
+  if (feed.urlListPath && preProcessUrls.length > 0) {
+    urlsMarked = podcastFeedManager.markUrlsDownloaded(
+      feed.urlListPath,
+      preProcessUrls,
+    );
   }
 
   return json({ results, summary, urlsMarked });
