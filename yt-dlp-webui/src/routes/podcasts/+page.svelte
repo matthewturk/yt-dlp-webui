@@ -32,6 +32,7 @@
     Shield,
     Check,
   } from "lucide-svelte";
+  import { base } from "$app/paths";
 
   const toastStore = getToastStore();
 
@@ -105,7 +106,7 @@
 
   async function fetchFeeds() {
     try {
-      const res = await fetch("/api/podcasts");
+      const res = await fetch(`${base}/api/podcasts`);
       const data = await res.json();
       feeds = data.feeds || [];
     } catch (e) {
@@ -152,8 +153,8 @@
   async function loadFeedData(feedId: string) {
     try {
       const [csvRes, urlRes] = await Promise.all([
-        fetch(`/api/podcasts/${feedId}/csv`),
-        fetch(`/api/podcasts/${feedId}/urls`),
+        fetch(`${base}/api/podcasts/${feedId}/csv`),
+        fetch(`${base}/api/podcasts/${feedId}/urls`),
       ]);
       const csvData = await csvRes.json();
       const urlData = await urlRes.json();
@@ -171,13 +172,13 @@
     try {
       let res;
       if (isNewFeed) {
-        res = await fetch("/api/podcasts", {
+        res = await fetch(`${base}/api/podcasts`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(editingFeed),
         });
       } else {
-        res = await fetch(`/api/podcasts/${editingFeed.id}`, {
+        res = await fetch(`${base}/api/podcasts/${editingFeed.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(editingFeed),
@@ -212,7 +213,7 @@
 
   async function deleteFeed(id: string) {
     try {
-      const res = await fetch(`/api/podcasts/${id}`, { method: "DELETE" });
+      const res = await fetch(`${base}/api/podcasts/${id}`, { method: "DELETE" });
       if (res.ok) {
         toastStore.trigger({
           message: "Feed deleted",
@@ -233,7 +234,7 @@
     if (!selectedFeedId) return;
     savingCsv = true;
     try {
-      const res = await fetch(`/api/podcasts/${selectedFeedId}/csv`, {
+      const res = await fetch(`${base}/api/podcasts/${selectedFeedId}/csv`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: csvContent }),
@@ -258,7 +259,7 @@
     if (!selectedFeedId) return;
     savingUrls = true;
     try {
-      const res = await fetch(`/api/podcasts/${selectedFeedId}/urls`, {
+      const res = await fetch(`${base}/api/podcasts/${selectedFeedId}/urls`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: urlContent }),
@@ -285,7 +286,7 @@
     if (!selectedFeedId) return;
     downloading = true;
     try {
-      const res = await fetch(`/api/podcasts/${selectedFeedId}/download`, {
+      const res = await fetch(`${base}/api/podcasts/${selectedFeedId}/download`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -317,7 +318,7 @@
     processing = true;
     processResults = null;
     try {
-      const res = await fetch(`/api/podcasts/${selectedFeedId}/process`, {
+      const res = await fetch(`${base}/api/podcasts/${selectedFeedId}/process`, {
         method: "POST",
       });
       const data = await res.json();
@@ -347,7 +348,7 @@
     if (!selectedFeedId) return;
     markingDownloaded = true;
     try {
-      const res = await fetch(`/api/podcasts/${selectedFeedId}/mark-downloaded`, {
+      const res = await fetch(`${base}/api/podcasts/${selectedFeedId}/mark-downloaded`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -379,7 +380,7 @@
   async function scanDirectories() {
     scanning = true;
     try {
-      const res = await fetch("/api/podcasts/scan");
+      const res = await fetch(`${base}/api/podcasts/scan`);
       const data = await res.json();
       scanFiles = data.files || [];
       scanDirs = data.scanDirs || [];
@@ -393,7 +394,7 @@
   async function addScanDir() {
     if (!newScanDir.trim()) return;
     try {
-      const res = await fetch("/api/podcasts/scan", {
+      const res = await fetch(`${base}/api/podcasts/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "add", dir: newScanDir.trim() }),
@@ -411,7 +412,7 @@
 
   async function removeScanDir(dir: string) {
     try {
-      const res = await fetch("/api/podcasts/scan", {
+      const res = await fetch(`${base}/api/podcasts/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "remove", dir }),

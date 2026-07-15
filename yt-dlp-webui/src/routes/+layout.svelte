@@ -7,6 +7,7 @@
     Modal,
     initializeStores,
   } from "@skeletonlabs/skeleton";
+  import { base } from "$app/paths";
 
   initializeStores();
 </script>
@@ -23,14 +24,14 @@
     >
       <svelte:fragment slot="lead">
         <div class="flex items-center space-x-4">
-          <a href="/" class="text-xl uppercase tracking-widest hover:text-primary-400 transition-colors"><strong>yt-dlp</strong></a>
+          <a href="{base}/" class="text-xl uppercase tracking-widest hover:text-primary-400 transition-colors"><strong>yt-dlp</strong></a>
         </div>
       </svelte:fragment>
       <div class="font-bold text-surface-500-400-token">Web Interface</div>
       <svelte:fragment slot="trail">
         <a
           class="btn btn-sm variant-ghost-surface"
-          href="/podcasts"
+          href="{base}/podcasts"
         >
           Podcasts
         </a>

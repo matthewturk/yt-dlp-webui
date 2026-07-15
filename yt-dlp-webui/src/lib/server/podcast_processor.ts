@@ -449,6 +449,8 @@ export function findCompletedMediaUrls(destinationDir: string): Set<string> {
   walk(destinationDir);
   return urls;
 }
+
+interface PodcastDownloadStatus {
   feedId: string;
   feedName: string;
   totalUrls: number;
