@@ -1,6 +1,6 @@
 name: "yt-dlp WebUI"
 description: "A simple web interface for yt-dlp"
-version: "1.2.4"
+version: "1.2.5"
 slug: "yt-dlp-webui"
 arch:
   - aarch64
@@ -27,6 +27,9 @@ options:
   extra_args: ""
   cookies_path: "/share/yt-dlp-webui/cookies.txt"
   auto_update: true
+  podcast_feeds_path: "/data/podcast_feeds.json"
+  podcast_staging_dir: "/data/podcast-staging"
+  podcast_scan_dirs: []
 schema:
   yt_dlp_path: str
   history_path: str
@@ -36,3 +39,7 @@ schema:
   extra_args: str
   cookies_path: str
   auto_update: bool
+  podcast_feeds_path: str
+  podcast_staging_dir: str
+  podcast_scan_dirs:
+    - str
