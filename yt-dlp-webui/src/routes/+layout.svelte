@@ -23,11 +23,17 @@
     >
       <svelte:fragment slot="lead">
         <div class="flex items-center space-x-4">
-          <strong class="text-xl uppercase tracking-widest">yt-dlp</strong>
+          <a href="/" class="text-xl uppercase tracking-widest hover:text-primary-400 transition-colors"><strong>yt-dlp</strong></a>
         </div>
       </svelte:fragment>
       <div class="font-bold text-surface-500-400-token">Web Interface</div>
       <svelte:fragment slot="trail">
+        <a
+          class="btn btn-sm variant-ghost-surface"
+          href="/podcasts"
+        >
+          Podcasts
+        </a>
         <a
           class="btn btn-sm variant-ghost-surface"
           href="https://github.com/matthewturk/yt-dlp-webui"

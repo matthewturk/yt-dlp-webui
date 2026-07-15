@@ -8,6 +8,7 @@ export interface DownloadTask {
   id: string;
   url: string;
   options: any;
+  feedId?: string;
   status:
     | "queued"
     | "downloading"
@@ -39,8 +40,9 @@ interface QueueResponseOptions {
 
 class QueueManager {
   private queue: DownloadTask[] = [];
-  private activeTask: DownloadTask | null = null;
-  private activeProcess: any = null;
+  private activeTasks: Map<string, { task: DownloadTask; process: any }> =
+    new Map();
+  private maxConcurrent: number = 1;
   private config: any = null;
 
   constructor() {
@@ -48,6 +50,15 @@ class QueueManager {
     if (!fs.existsSync(this.getHistoryPath())) {
       fs.writeFileSync(this.getHistoryPath(), JSON.stringify([]));
     }
+  }
+
+  setMaxConcurrent(n: number) {
+    this.maxConcurrent = Math.max(1, n);
+    this.processQueue();
+  }
+
+  getMaxConcurrent(): number {
+    return this.maxConcurrent;
   }
 
   private loadConfig() {
@@ -517,11 +528,46 @@ class QueueManager {
     return task;
   }
 
+  addPodcastTasks(
+    urls: string[],
+    options: any,
+    feedId: string,
+  ): DownloadTask[] {
+    const tasks: DownloadTask[] = [];
+    for (const url of urls) {
+      const task: DownloadTask = {
+        id: randomUUID(),
+        url,
+        options: { ...options },
+        feedId,
+        status: "queued",
+        progress: "0%",
+        logs: [],
+      };
+      this.queue.push(task);
+      tasks.push(task);
+    }
+    this.processQueue();
+    return tasks;
+  }
+
+  getTasksByFeedId(feedId: string): DownloadTask[] {
+    const active = Array.from(this.activeTasks.values())
+      .filter((a) => a.task.feedId === feedId)
+      .map((a) => a.task);
+    const queued = this.queue.filter(
+      (t) => t.feedId === feedId && t.status === "queued",
+    );
+    return [...active, ...queued];
+  }
+
   cancelTask(id: string) {
-    if (this.activeTask?.id === id && this.activeProcess) {
-      this.activeProcess.kill("SIGINT");
-      this.activeTask.status = "cancelled";
-      this.activeTask.progress = "Cancelled";
+    const active = this.activeTasks.get(id);
+    if (active) {
+      active.process.kill("SIGINT");
+      active.task.status = "cancelled";
+      active.task.progress = "Cancelled";
+      this.activeTasks.delete(id);
       return true;
     }
     const task = this.queue.find((t) => t.id === id);
@@ -534,7 +580,7 @@ class QueueManager {
   }
 
   removeTask(id: string) {
-    if (this.activeTask?.id === id) {
+    if (this.activeTasks.has(id)) {
       this.cancelTask(id);
     }
     const index = this.queue.findIndex((t) => t.id === id);
@@ -561,14 +607,18 @@ class QueueManager {
         t.status === "cancelled",
     );
 
-    // Sanitize sensitive fields from task options before returning
     const sanitizeTask = (task: DownloadTask) => ({
       ...task,
       options: this.sanitizeOptionsForDisplay(task.options),
     });
 
+    const activeTasks = Array.from(this.activeTasks.values()).map(
+      (a) => sanitizeTask(a.task),
+    );
+
     return {
-      active: this.activeTask ? sanitizeTask(this.activeTask) : null,
+      active: activeTasks.length > 0 ? activeTasks[0] : null,
+      activeTasks: activeTasks,
       pending: pending.map(sanitizeTask),
       completed: includeAllCompleted
         ? completedAll.map(sanitizeTask)
@@ -577,6 +627,8 @@ class QueueManager {
         total: this.queue.length,
         queued: pending.length,
         completed: completedAll.length,
+        active: activeTasks.length,
+        maxConcurrent: this.maxConcurrent,
       },
     };
   }
@@ -597,42 +649,44 @@ class QueueManager {
   }
 
   private async processQueue() {
-    if (this.activeTask || this.queue.length === 0) return;
+    while (this.activeTasks.size < this.maxConcurrent) {
+      this.loadConfig();
 
-    this.loadConfig(); // Refresh config
+      const task = this.queue.find((t) => t.status === "queued");
+      if (!task) break;
 
-    const task = this.queue.find((t) => t.status === "queued");
-    if (!task) return;
+      const format = this.getFormatString(task.options);
 
-    const format = this.getFormatString(task.options);
-
-    if (!task.options.force && this.isAlreadyDownloaded(task.url, format)) {
-      task.status = "skipped";
-      task.progress = "Already downloaded";
-      this.processQueue();
-      return;
-    }
-
-    this.activeTask = task;
-    task.status = "downloading";
-    task.logs = [];
-
-    try {
-      await this.runDownload(task);
-      if (this.activeTask?.status !== "cancelled") {
-        task.status = "completed";
-        task.progress = "100%";
-        this.addToHistory(task.url, format);
+      if (!task.options.force && this.isAlreadyDownloaded(task.url, format)) {
+        task.status = "skipped";
+        task.progress = "Already downloaded";
+        continue;
       }
-    } catch (e: any) {
-      if (this.activeTask?.status !== "cancelled") {
-        task.status = "failed";
-        task.error = e.message;
-      }
-    } finally {
-      this.activeTask = null;
-      this.activeProcess = null;
-      this.processQueue();
+
+      task.status = "downloading";
+      task.logs = [];
+      this.activeTasks.set(task.id, { task, process: null });
+
+      this.runDownload(task)
+        .then(() => {
+          const active = this.activeTasks.get(task.id);
+          if (active && task.status !== "cancelled") {
+            task.status = "completed";
+            task.progress = "100%";
+            this.addToHistory(task.url, format);
+          }
+        })
+        .catch((e: any) => {
+          const active = this.activeTasks.get(task.id);
+          if (active && task.status !== "cancelled") {
+            task.status = "failed";
+            task.error = e.message;
+          }
+        })
+        .finally(() => {
+          this.activeTasks.delete(task.id);
+          this.processQueue();
+        });
     }
   }
 
@@ -683,23 +737,30 @@ class QueueManager {
       const config = this.config;
 
       let selectedLocation = null;
-      if (task.options.locationName) {
-        selectedLocation = config.allowed_locations.find(
-          (loc: any) => loc.name === task.options.locationName,
-        );
-      }
 
-      if (!selectedLocation && config.allowed_locations.length > 0) {
-        selectedLocation = config.allowed_locations[0];
-      }
+      // Allow direct outputDir override (used by podcast feed downloads)
+      let outputDir = "";
+      if (task.options.outputDir) {
+        outputDir = task.options.outputDir;
+      } else {
+        if (task.options.locationName) {
+          selectedLocation = config.allowed_locations.find(
+            (loc: any) => loc.name === task.options.locationName,
+          );
+        }
 
-      if (!selectedLocation) {
-        return reject(
-          new Error("No valid download location found in configuration"),
-        );
-      }
+        if (!selectedLocation && config.allowed_locations.length > 0) {
+          selectedLocation = config.allowed_locations[0];
+        }
 
-      const outputDir = selectedLocation.path;
+        if (!selectedLocation) {
+          return reject(
+            new Error("No valid download location found in configuration"),
+          );
+        }
+
+        outputDir = selectedLocation.path;
+      }
       const beforeFiles = this.listFilesRecursive(outputDir);
       const ytDlpPath = config.yt_dlp_path || "yt-dlp";
       const baseArgs = [
@@ -777,6 +838,9 @@ class QueueManager {
       if (task.options.embedMetadata) args.push("--embed-metadata");
       if (task.options.embedThumbnail) args.push("--embed-thumbnail");
 
+      // Prevent overwriting existing files
+      if (task.options.noOverwrites) args.push("--no-overwrites");
+
       // Subtitle embedding
       if (task.options.embedSubtitles) {
         args.push("--write-subs", "--embed-subs");
@@ -835,7 +899,8 @@ class QueueManager {
       }
 
       const process = spawn(ytDlpPath, args);
-      this.activeProcess = process;
+      const activeEntry = this.activeTasks.get(task.id);
+      if (activeEntry) activeEntry.process = process;
 
       process.stdout.on("data", (data: Buffer) => {
         const line = data.toString();
@@ -858,7 +923,6 @@ class QueueManager {
       });
 
       process.on("close", (code: number | null) => {
-        this.activeProcess = null;
         if (task.status === "cancelled") {
           resolve();
           return;
