@@ -51,7 +51,7 @@ export async function POST({ params, request }) {
     outputDir: downloadDir,
     outputNameMode: "custom_title" as const,
     outputName: feed.name,
-    force: body.force || false,
+    force: true,
     noOverwrites: feed.downloadOptions.noOverwrites,
     advanced: true,
   };
