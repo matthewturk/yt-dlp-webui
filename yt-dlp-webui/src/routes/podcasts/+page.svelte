@@ -714,21 +714,23 @@
       </div>
     {:else if selectedFeed}
       <!-- Feed Detail View -->
-      <div class="card p-6 shadow-xl border border-surface-500/20">
-        <header class="flex items-center justify-between mb-6">
-          <div class="flex items-center space-x-3">
-            <div class="p-2 variant-soft-primary rounded-lg">
-              <Podcast size={24} />
+      <div class="card p-4 md:p-6 shadow-xl border border-surface-500/20">
+        <header class="mb-4 md:mb-6">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center space-x-3 min-w-0">
+              <div class="p-2 variant-soft-primary rounded-lg flex-shrink-0">
+                <Podcast size={24} />
+              </div>
+              <div class="min-w-0">
+                <h2 class="h2 text-lg md:h2 truncate">{selectedFeed.name}</h2>
+                <p class="text-xs md:text-sm opacity-60 truncate">{selectedFeed.destinationDir || "No destination"}</p>
+              </div>
             </div>
-            <div>
-              <h2 class="h2">{selectedFeed.name}</h2>
-              <p class="text-sm opacity-60">{selectedFeed.destinationDir || "No destination"}</p>
-            </div>
-          </div>
-          <div class="flex gap-2">
-            <button class="btn btn-sm variant-soft-primary" on:click={() => editFeed(selectedFeed)}>
-              <Edit3 size={14} /> Edit
+            <button class="btn btn-sm variant-soft-primary flex-shrink-0" on:click={() => editFeed(selectedFeed)}>
+              <Edit3 size={14} /> <span class="hidden sm:inline">Edit</span>
             </button>
+          </div>
+          <div class="flex flex-wrap gap-2">
             <div class="flex items-center gap-1">
               <input
                 class="input w-16 text-xs text-center"
@@ -749,7 +751,7 @@
                 {:else}
                   <Download size={14} />
                 {/if}
-                Download ({downloadLimit ? Math.min(downloadLimit, urlList.length) : urlList.length})
+                <span class="hidden xs:inline">Download</span> ({downloadLimit ? Math.min(downloadLimit, urlList.length) : urlList.length})
               </button>
             </div>
             <button
