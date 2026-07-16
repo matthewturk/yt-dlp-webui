@@ -49,6 +49,16 @@ function parseCsvDate(dateStr: string): string | null {
       dt.setDate(dt.getDate() + 1);
       return dt.toISOString().split("T")[0];
     }
+    // ISO format: 2020-04-08
+    const isoMatch = cleaned.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2].padStart(2, "0")}-${isoMatch[3].padStart(2, "0")}`;
+    }
+    // YYYYMMDD format: 20200408
+    const compactMatch = cleaned.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (compactMatch) {
+      return `${compactMatch[1]}-${compactMatch[2]}-${compactMatch[3]}`;
+    }
   } catch {}
   return null;
 }
