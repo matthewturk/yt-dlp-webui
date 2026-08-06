@@ -658,6 +658,7 @@
             <label class="label">
               <span class="text-xs opacity-60">Audio Format</span>
               <select class="select" bind:value={editingFeed.downloadOptions.audioFormat}>
+                <option value="">Original (No Transcode)</option>
                 <option value="m4a">M4A</option>
                 <option value="mp3">MP3</option>
                 <option value="opus">Opus</option>
@@ -780,7 +781,7 @@
             <p class="text-[10px] opacity-50">Pending</p>
           </div>
           <div class="card p-3 variant-soft-surface text-center">
-            <p class="text-lg font-bold">{selectedFeed.downloadOptions.audioFormat.toUpperCase()}</p>
+            <p class="text-lg font-bold">{selectedFeed.downloadOptions.audioFormat ? selectedFeed.downloadOptions.audioFormat.toUpperCase() : "Original"}</p>
             <p class="text-[10px] opacity-50">Format</p>
           </div>
           <div class="card p-3 variant-soft-surface text-center">

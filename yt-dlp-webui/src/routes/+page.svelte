@@ -42,7 +42,7 @@
   let locationName = "";
   let isPlaylist = false;
   let audioOnly = false;
-  let audioFormat = "mp3";
+  let audioFormat = "";
   let maxResolution = "";
   let embedMetadata = true;
   let enhancedAudioMetadata = true;
@@ -516,11 +516,19 @@
                           class="select select-sm"
                           bind:value={audioFormat}
                         >
+                          <option value="">Original (No Transcode)</option>
                           <option value="mp3">MP3</option>
                           <option value="m4a">M4A</option>
                           <option value="opus">Opus</option>
                           <option value="wav">WAV</option>
                         </select>
+                        {#if !audioFormat}
+                          <span
+                            class="text-[10px] opacity-60 pl-7 block mt-1"
+                            >Downloads the native audio stream (e.g. M4A/Opus)
+                            directly — no conversion, no ffmpeg needed.</span
+                          >
+                        {/if}
                       </label>
                       <label
                         class="card p-3 variant-soft-tertiary border border-tertiary-500/20 flex items-start space-x-3 cursor-pointer"

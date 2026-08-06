@@ -802,8 +802,9 @@ class QueueManager {
       }
 
       if (task.options.audioOnly) {
-        args.push("--extract-audio");
         if (task.options.audioFormat) {
+          // Convert to the requested audio format
+          args.push("--extract-audio");
           args.push("--audio-format", task.options.audioFormat);
 
           const audioQuality = this.resolveLossyAudioQuality(
@@ -814,6 +815,10 @@ class QueueManager {
           if (audioQuality) {
             args.push("--audio-quality", audioQuality);
           }
+        } else if (!task.options.format) {
+          // No transcode requested: grab the best native audio-only stream
+          // directly without ffmpeg conversion
+          args.push("-f", "bestaudio/best");
         }
       }
 
