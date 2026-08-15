@@ -22,10 +22,22 @@ input_select:
       - Music
       - Downloads
 
+# A select that auto-lists every media_player entity on the system.
+# The dropdown on the dashboard picks up new players without editing YAML.
+# NOTE: templated options require the `template` integration - the plain
+# `select` helper does NOT accept a template for `options`.
+template:
+  - select:
+      - name: Media Player
+        unique_id: yt_dlp_media_player
+        icon: mdi:speaker
+        options: "{{ states.media_player | map(attribute='entity_id') | sort | list }}"
+        optimistic: true
+
 # 2. Automation  (automations.yaml)
 automation:
   - alias: yt-dlp Download & Play
-    description: Download audio from the entered URL and stream it to the media player
+    description: Download audio from the entered URL and stream it to the chosen media player
     mode: single
     trigger: []
     action:
@@ -33,7 +45,9 @@ automation:
         data:
           url: "{{ states('input_text.yt_dlp_url') }}"
           location: "{{ states('input_select.yt_dlp_location') }}"
-          media_player: media_player.kitchen_speaker
+          media_player: "{{ states('select.media_player') }}"
+          audio_format: m4a
+          force: false
       - service: input_text.set_value
         target:
           entity_id: input_text.yt_dlp_url
@@ -50,6 +64,8 @@ cards:
         name: YouTube URL
       - entity: input_select.yt_dlp_location
         name: Download to
+      - entity: select.media_player
+        name: Media Player
       - entity: sensor.yt_dlp_last_completed_audio
         name: Last Downloaded
   - type: button
@@ -75,7 +91,7 @@ cards:
 #         data:
 #           url: "{{ trigger.event.data.url }}"
 #           location: Music
-#           media_player: media_player.kitchen_speaker
+#           media_player: "{{ states('select.media_player') }}"
 #
 # You can also subscribe to the completion event fired by the integration:
 #   event_type: yt_dlp_webui_download_completed
