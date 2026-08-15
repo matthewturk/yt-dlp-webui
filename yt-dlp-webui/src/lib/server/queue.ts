@@ -376,28 +376,49 @@ class QueueManager {
         const infoJson = JSON.parse(fs.readFileSync(infoPath, "utf-8"));
         const tags = this.buildEnhancedMetadataTags(infoJson);
         const tempPath = `${mediaPath}.tagtmp${path.extname(mediaPath)}`;
+        const isMp4Container = [".m4a", ".mp4", ".m4v", ".mov"].includes(
+          path.extname(mediaPath).toLowerCase(),
+        );
 
-        const ffmpegArgs = [
-          "-y",
-          "-v",
-          "error",
-          "-i",
-          mediaPath,
-          "-map",
-          "0",
-          "-c",
-          "copy",
-        ];
+        const buildArgs = (mapStream: string): string[] => {
+          const ffmpegArgs = [
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            mediaPath,
+            "-map",
+            mapStream,
+            "-c",
+            "copy",
+          ];
+          for (const [key, value] of tags) {
+            ffmpegArgs.push("-metadata", `${key}=${value}`);
+          }
+          ffmpegArgs.push(tempPath);
+          return ffmpegArgs;
+        };
 
-        for (const [key, value] of tags) {
-          ffmpegArgs.push("-metadata", `${key}=${value}`);
+        let ffmpeg = spawnSync("ffmpeg", buildArgs("0"), {
+          encoding: "utf-8",
+        });
+        let exitCode = ffmpeg.status ?? 1;
+        let ffmpegError = ffmpeg.stderr || "";
+
+        if ((exitCode !== 0 || !fs.existsSync(tempPath)) && isMp4Container) {
+          // Some ffmpeg builds can't remux the embedded chapter text track
+          // with -c copy into an MP4; retry tagging just the audio stream so
+          // the enhanced tags still get applied.
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+          task.logs.push(
+            `metadata: MP4 remux failed, retrying with audio stream only`,
+          );
+          ffmpeg = spawnSync("ffmpeg", buildArgs("0:a"), {
+            encoding: "utf-8",
+          });
+          exitCode = ffmpeg.status ?? 1;
+          ffmpegError = ffmpeg.stderr || "";
         }
-
-        ffmpegArgs.push(tempPath);
-
-        const ffmpeg = spawnSync("ffmpeg", ffmpegArgs, { encoding: "utf-8" });
-        const exitCode = ffmpeg.status ?? 1;
-        const ffmpegError = ffmpeg.stderr || "";
 
         if (exitCode === 0 && fs.existsSync(tempPath)) {
           fs.renameSync(tempPath, mediaPath);
@@ -803,6 +824,13 @@ class QueueManager {
 
       if (task.options.audioOnly) {
         if (task.options.audioFormat) {
+          // When targeting m4a without an explicit format, prefer a native
+          // m4a stream (e.g. YouTube format 140) so yt-dlp doesn't needlessly
+          // re-encode; the extract-audio postprocessor only converts when the
+          // source isn't already m4a, which still guarantees .m4a output.
+          if (task.options.audioFormat === "m4a" && !task.options.format) {
+            args.push("-f", "bestaudio[ext=m4a]/bestaudio/best");
+          }
           // Convert to the requested audio format
           args.push("--extract-audio");
           args.push("--audio-format", task.options.audioFormat);
@@ -817,13 +845,28 @@ class QueueManager {
           }
         } else if (!task.options.format) {
           // No transcode requested: grab the best native audio-only stream
-          // directly without ffmpeg conversion
-          args.push("-f", "bestaudio/best");
+          // directly without ffmpeg conversion. Prefer m4a (AAC) when
+          // available so the result is playable on streaming speakers
+          // (Google Home/Cast) without any conversion.
+          args.push("-f", "bestaudio[ext=m4a]/bestaudio/best");
         }
       }
 
       if (task.options.embedMetadata) args.push("--embed-metadata");
-      if (task.options.embedThumbnail) args.push("--embed-thumbnail");
+
+      // Thumbnail embedding only works in containers that support cover art
+      // (mp3/mkv/ogg/flac/m4a). Audio-only streams frequently land in WebM,
+      // where yt-dlp aborts the whole download with a postprocessor error, so
+      // skip it and keep the download from being marked failed.
+      if (task.options.embedThumbnail) {
+        if (task.options.audioOnly) {
+          task.logs.push(
+            "thumbnail: skipped --embed-thumbnail for audio-only download",
+          );
+        } else {
+          args.push("--embed-thumbnail");
+        }
+      }
 
       // Prevent overwriting existing files
       if (task.options.noOverwrites) args.push("--no-overwrites");

@@ -32,6 +32,7 @@
     BookOpen,
     FileJson,
     Upload,
+    Volume2,
   } from "lucide-svelte";
 
   const toastStore = getToastStore();
@@ -282,48 +283,57 @@
     loading = true;
     error = "";
 
-    const urls = urlInput
-      .split("\n")
-      .map((u) => u.trim())
-      .filter((u) => u.length > 0);
-
+    const urls = parseUrls();
     if (urls.length === 0) {
       error = "Please enter at least one URL";
       loading = false;
       return;
     }
 
+    await queueUrls(urls, currentOptions());
+    loading = false;
+  }
+
+  function parseUrls(): string[] {
+    return urlInput
+      .split("\n")
+      .map((u) => u.trim())
+      .filter((u) => u.length > 0);
+  }
+
+  function currentOptions() {
+    return {
+      format,
+      filename,
+      locationName,
+      isPlaylist,
+      audioOnly,
+      audioFormat,
+      maxResolution,
+      embedMetadata,
+      enhancedAudioMetadata,
+      embedThumbnail,
+      embedSubtitles,
+      subLanguage: embedSubtitles ? subLanguage : undefined,
+      embedChapters,
+      outputNameMode,
+      outputName,
+      sanitizeFilename,
+      absMode,
+      force,
+      alsoDownloadAudio,
+      username: username || undefined,
+      password: password || undefined,
+      advanced: true,
+    };
+  }
+
+  async function queueUrls(urls: string[], options: any) {
     try {
       const response = await fetch("api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          urls,
-          options: {
-            format,
-            filename,
-            locationName,
-            isPlaylist,
-            audioOnly,
-            audioFormat,
-            maxResolution,
-            embedMetadata,
-            enhancedAudioMetadata,
-            embedThumbnail,
-            embedSubtitles,
-            subLanguage: embedSubtitles ? subLanguage : undefined,
-            embedChapters,
-            outputNameMode,
-            outputName,
-            sanitizeFilename,
-            absMode,
-            force,
-            alsoDownloadAudio,
-            username: username || undefined,
-            password: password || undefined,
-            advanced: true,
-          },
-        }),
+        body: JSON.stringify({ urls, options }),
       });
 
       const data = await response.json();
@@ -338,14 +348,41 @@
         };
         toastStore.trigger(t);
         fetchQueue();
+        return true;
       } else {
         error = data.error || "Something went wrong";
+        return false;
       }
     } catch (e) {
       error = "Failed to connect to server";
-    } finally {
-      loading = false;
+      return false;
     }
+  }
+
+  // One-click shortcut: grab the best audio-only stream and guarantee an .m4a
+  // file (native m4a/AAC when available, transcode otherwise) so the result
+  // can be handed straight to a streaming speaker.
+  async function handleStreamToSpeaker() {
+    loading = true;
+    error = "";
+
+    const urls = parseUrls();
+    if (urls.length === 0) {
+      error = "Please enter at least one URL";
+      loading = false;
+      return;
+    }
+
+    await queueUrls(urls, {
+      ...currentOptions(),
+      audioOnly: true,
+      audioFormat: "m4a",
+      maxResolution: undefined,
+      embedThumbnail: false,
+      absMode: false,
+      alsoDownloadAudio: false,
+    });
+    loading = false;
   }
 
   async function clearHistory() {
@@ -1016,19 +1053,35 @@
           </AccordionItem>
         </Accordion>
 
-        <button
-          class="btn variant-filled-primary w-full py-4 font-bold shadow-lg border border-primary-500/50 hover:scale-[1.01] active:scale-[0.99] transition-all"
-          on:click={handleDownload}
-          disabled={loading || !urlInput}
-        >
-          {#if loading}
-            <RefreshCw class="animate-spin mr-2" size={20} />
-            <span>Processing...</span>
-          {:else}
-            <Play class="mr-2" size={20} />
-            <span>Start Download</span>
-          {/if}
-        </button>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            class="btn variant-filled-primary w-full py-4 font-bold shadow-lg border border-primary-500/50 hover:scale-[1.01] active:scale-[0.99] transition-all"
+            on:click={handleDownload}
+            disabled={loading || !urlInput}
+          >
+            {#if loading}
+              <RefreshCw class="animate-spin mr-2" size={20} />
+              <span>Processing...</span>
+            {:else}
+              <Play class="mr-2" size={20} />
+              <span>Start Download</span>
+            {/if}
+          </button>
+          <button
+            class="btn variant-filled-secondary w-full py-4 font-bold shadow-lg border border-secondary-500/50 hover:scale-[1.01] active:scale-[0.99] transition-all"
+            on:click={handleStreamToSpeaker}
+            disabled={loading || !urlInput}
+            title="Always outputs .m4a — grabs the best audio-only stream (native M4A/AAC when available) so you can point your speaker at the file URL"
+          >
+            {#if loading}
+              <RefreshCw class="animate-spin mr-2" size={20} />
+              <span>Processing...</span>
+            {:else}
+              <Volume2 class="mr-2" size={20} />
+              <span>Stream to Speaker</span>
+            {/if}
+          </button>
+        </div>
 
         {#if error}
           <div

@@ -60,7 +60,7 @@ export async function POST({ request }) {
         queueManager.addTask(url, {
           ...options,
           audioOnly: true,
-          format: "bestaudio/best", // Ensure we use an audio format for the audio task
+          format: "bestaudio[ext=m4a]/bestaudio/best", // Prefer streamable AAC for the audio task
           maxResolution: undefined, // Irrelevant for audio
           alsoDownloadAudio: false, // Prevent infinite recursion
         }),
