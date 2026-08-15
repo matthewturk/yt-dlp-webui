@@ -1,5 +1,5 @@
 download:
-  description: "Queue a video or playlist for download via yt-dlp WebUI."
+  description: "Queue a video or playlist for download via yt-dlp WebUI. If a media_player is supplied, the audio is streamed to that player when the download completes."
   fields:
     url:
       description: "The URL of the video or playlist to download."
@@ -13,10 +13,18 @@ download:
       description: "Whether to extract audio only."
       example: true
       default: false
+    audio_format:
+      description: "Audio format to extract/convert to (m4a, mp3, opus, wav, ...). Defaults to best native m4a stream."
+      example: "m4a"
+      required: false
     force:
       description: "Whether to force re-download even if already in history."
       example: true
       default: false
+    media_player:
+      description: "Media player entity to stream the finished audio to (auto-plays on completion). If set, audio_only is forced to true."
+      example: "media_player.kitchen_speaker"
+      required: false
     username:
       description: "Username for sites that require authentication. Passed directly to yt-dlp, never stored on disk."
       example: "myuser"
@@ -25,3 +33,43 @@ download:
       description: "Password for sites that require authentication. Passed directly to yt-dlp, never stored on disk."
       example: "mypassword"
       required: false
+
+download_audio:
+  description: "Queue an audio-only download via yt-dlp WebUI. If a media_player is supplied, the audio is streamed to that player when the download completes."
+  fields:
+    url:
+      description: "The URL of the video or playlist to download."
+      example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+      required: true
+    location:
+      description: "The name of the download location (as defined in config.json)."
+      example: "Music"
+      required: false
+    audio_format:
+      description: "Audio format to extract/convert to (m4a, mp3, opus, wav, ...). Defaults to best native m4a stream."
+      example: "m4a"
+      required: false
+    force:
+      description: "Whether to force re-download even if already in history."
+      example: true
+      default: false
+    media_player:
+      description: "Media player entity to stream the finished audio to (auto-plays on completion)."
+      example: "media_player.kitchen_speaker"
+      required: false
+    username:
+      description: "Username for sites that require authentication. Passed directly to yt-dlp, never stored on disk."
+      example: "myuser"
+      required: false
+    password:
+      description: "Password for sites that require authentication. Passed directly to yt-dlp, never stored on disk."
+      example: "mypassword"
+      required: false
+
+play_completed:
+  description: "Stream the most recently completed audio download to a media player."
+  fields:
+    media_player:
+      description: "Media player entity to stream the audio to."
+      example: "media_player.kitchen_speaker"
+      required: true

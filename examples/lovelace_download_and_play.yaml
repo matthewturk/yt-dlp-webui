@@ -1,0 +1,82 @@
+# yt-dlp WebUI: Download Audio & Play on Media Player
+#
+# End-to-end example: type (or paste) a YouTube URL on your dashboard, pick a
+# download location, tap the button, and the audio is downloaded into that
+# location and then streamed to your media player.
+#
+# Adjust the helper options / media_player entity to your setup. The
+# `input_select` options must match the `allowed_locations[].name` entries in
+# the add-on's webui_config.json (or add-on configuration).
+#
+# 1. Helpers  (configuration.yaml)
+input_text:
+  yt_dlp_url:
+    name: YouTube URL
+    icon: mdi:link-variant
+
+input_select:
+  yt_dlp_location:
+    name: Download Location
+    icon: mdi:folder-music
+    options:
+      - Music
+      - Downloads
+
+# 2. Automation  (automations.yaml)
+automation:
+  - alias: yt-dlp Download & Play
+    description: Download audio from the entered URL and stream it to the media player
+    mode: single
+    trigger: []
+    action:
+      - service: yt_dlp_webui.download_audio
+        data:
+          url: "{{ states('input_text.yt_dlp_url') }}"
+          location: "{{ states('input_select.yt_dlp_location') }}"
+          media_player: media_player.kitchen_speaker
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.yt_dlp_url
+        data:
+          value: ""
+
+# 3. Lovelace card  (paste into a dashboard view, Raw configuration editor)
+type: vertical-stack
+cards:
+  - type: entities
+    title: yt-dlp Download & Play
+    entities:
+      - entity: input_text.yt_dlp_url
+        name: YouTube URL
+      - entity: input_select.yt_dlp_location
+        name: Download to
+      - entity: sensor.yt_dlp_last_completed_audio
+        name: Last Downloaded
+  - type: button
+    name: Download & Play
+    icon: mdi:music-box-multiple
+    tap_action:
+      action: call-service
+      service: automation.trigger
+      data:
+        entity_id: automation.yt_dlp_download_and_play
+
+# ---------------------------------------------------------------------------
+# Alternative: trigger the same automation from a mobile notification action
+# ---------------------------------------------------------------------------
+#   - alias: yt-dlp Download & Play (notification)
+#     trigger:
+#       - platform: event
+#         event_type: mobile_app_notification_action
+#         event_data:
+#           action: DOWNLOAD_AND_PLAY
+#     action:
+#       - service: yt_dlp_webui.download_audio
+#         data:
+#           url: "{{ trigger.event.data.url }}"
+#           location: Music
+#           media_player: media_player.kitchen_speaker
+#
+# You can also subscribe to the completion event fired by the integration:
+#   event_type: yt_dlp_webui_download_completed
+#   event_data includes: url, output_path, location, media_player, task_id

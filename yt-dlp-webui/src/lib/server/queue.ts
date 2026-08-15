@@ -19,6 +19,10 @@ export interface DownloadTask {
   progress: string;
   error?: string;
   logs: string[];
+  /** Absolute path of the media file produced by the download. */
+  outputPath?: string;
+  /** Absolute paths of every media file produced by the download. */
+  outputFiles?: string[];
 }
 
 export interface HistoryEntry {
@@ -37,6 +41,20 @@ interface QueueResponseOptions {
   includeAllCompleted?: boolean;
   completedLimit?: number;
 }
+
+const AUDIO_EXTENSIONS = new Set([
+  ".mp3",
+  ".m4a",
+  ".aac",
+  ".opus",
+  ".ogg",
+  ".oga",
+  ".wav",
+  ".flac",
+  ".mka",
+  ".webm",
+  ".mp4",
+]);
 
 class QueueManager {
   private queue: DownloadTask[] = [];
@@ -339,12 +357,79 @@ class QueueManager {
     return tags.filter(([, value]) => value !== "");
   }
 
-  private applyEnhancedAudioMetadata(
+  private recordOutputFiles(
     task: DownloadTask,
     outputDir: string,
     beforeFiles: string[],
   ): void {
-    if (!task.options.audioOnly || !task.options.embedMetadata) return;
+    const afterFiles = this.listFilesRecursive(outputDir);
+    const beforeSet = new Set(beforeFiles);
+    const newFiles = afterFiles.filter((file) => !beforeSet.has(file));
+
+    // yt-dlp logs the destination path for every file it writes. This is
+    // reliable even when a file already existed (overwrite case), which the
+    // "new files only" comparison above cannot detect.
+    const logDestinations: string[] = [];
+    for (const line of task.logs) {
+      const destMatch = line.match(/Destination:\s+(.+)/);
+      const skipMatch = line.match(/\[download\]\s+(.+?)\s+has already been downloaded/);
+      const mergeMatch = line.match(/Merging formats into "(.+)"/);
+      const pathMatch = destMatch || skipMatch || mergeMatch;
+      if (pathMatch && pathMatch[1].trim()) logDestinations.push(pathMatch[1].trim());
+    }
+
+    const candidates = new Set<string>([...newFiles, ...logDestinations]);
+    const mediaFiles: string[] = [];
+    const seen = new Set<string>();
+
+    for (const candidate of candidates) {
+      const resolved = path.isAbsolute(candidate)
+        ? candidate
+        : path.join(outputDir, candidate);
+      const resolvedReal = fs.existsSync(resolved)
+        ? fs.realpathSync(resolved)
+        : resolved;
+
+      // Direct match: the written file is itself a media file.
+      if (fs.existsSync(resolvedReal) && AUDIO_EXTENSIONS.has(path.extname(resolvedReal).toLowerCase()) && !seen.has(resolvedReal)) {
+        seen.add(resolvedReal);
+        mediaFiles.push(resolvedReal);
+        continue;
+      }
+
+      // Transcode case: yt-dlp logged the intermediate container but then
+      // converted to a different extension (e.g. .webm -> .mp3). Look for a
+      // sibling audio file with the same base name.
+      const dir = path.dirname(resolved);
+      const base = path.basename(resolved, path.extname(resolved));
+      if (fs.existsSync(dir)) {
+        for (const name of fs.readdirSync(dir)) {
+          const candidatePath = path.join(dir, name);
+          const ext = path.extname(name).toLowerCase();
+          if (
+            path.basename(name, ext) === base &&
+            AUDIO_EXTENSIONS.has(ext) &&
+            !seen.has(candidatePath)
+          ) {
+            seen.add(candidatePath);
+            mediaFiles.push(candidatePath);
+          }
+        }
+      }
+    }
+
+    if (mediaFiles.length > 0) {
+      task.outputFiles = mediaFiles;
+      task.outputPath = mediaFiles[0];
+      task.logs.push(`output: ${mediaFiles.join(", ")}`);
+    }
+  }
+
+  private applyEnhancedAudioMetadata(
+    task: DownloadTask,
+    outputDir: string,
+    beforeFiles: string[],
+  ): void {    if (!task.options.audioOnly || !task.options.embedMetadata) return;
     if (task.options.enhancedAudioMetadata === false) return;
 
     const afterFiles = this.listFilesRecursive(outputDir);
@@ -951,6 +1036,7 @@ class QueueManager {
 
         if (code === 0) {
           this.applyEnhancedAudioMetadata(task, outputDir, beforeFiles);
+          this.recordOutputFiles(task, outputDir, beforeFiles);
           resolve();
           return;
         }

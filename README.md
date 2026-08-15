@@ -128,21 +128,56 @@ The `custom_components/yt-dlp-webui` folder provides a native integration for Ho
    yt_dlp_webui:
      host: "localhost" # Use the IP of your HA instance if running as an add-on
      port: 5173
+     # media_player: "media_player.kitchen_speaker"  # Optional: default player
+     # stream_base_url: "http://192.168.1.10:3000"   # Optional: override for streaming
+     # poll_interval: 10                              # Optional: seconds
    ```
+   > **Streaming note:** for a media player to reach the downloaded file, `host`
+   > (or `stream_base_url`) must be an address the player can reach on your
+   > network — use the add-on's LAN IP/port, not `localhost`.
 3. Restart Home Assistant.
 
 **Exposed Entities:**
 
 - `sensor.yt_dlp_active_downloads`: Number of currently downloading tasks.
 - `sensor.yt_dlp_queued_downloads`: Number of tasks waiting in the queue.
+- `sensor.yt_dlp_last_completed_audio`: Name of the most recently completed audio
+  file, with attributes exposing the source `url`, absolute `output_path`,
+  download `location`, target `media_player`, and `task_id`.
 
 **Services:**
 
 - `yt-dlp-webui.download`: Queue a new download.
   - `url` (Required): The video or playlist URL.
-  - `location` (Optional): The name of the location (e.g., "Movies").
+  - `location` (Optional): The name of the location (e.g., "Music"). Must match
+    an `allowed_locations` entry in the add-on configuration.
   - `audio_only` (Optional): Boolean to extract audio only.
+  - `audio_format` (Optional): Format to extract to (e.g. `m4a`, `mp3`, `opus`).
   - `force` (Optional): Boolean to force re-download even if in history.
+  - `media_player` (Optional): Entity to stream the finished audio to. When set,
+    `audio_only` is forced to `true` and playback starts automatically once the
+    download completes.
+  - `username` / `password` (Optional): Passed directly to `yt-dlp`.
+- `yt-dlp-webui.download_audio`: Same as `download` but always extracts audio.
+- `yt-dlp-webui.play_completed`: Stream the most recently completed audio
+  download to a media player.
+  - `media_player` (Required): Entity to stream the audio to.
+
+**Download & stream to a media player:**
+
+```yaml
+service: yt_dlp_webui.download_audio
+data:
+  url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  location: "Music"
+  media_player: "media_player.kitchen_speaker"
+```
+
+The integration polls the queue; when the download finishes it streams the
+file (served by the add-on at `/api/media?path=...`, restricted to the allowed
+locations) to the player via `media_player.play_media`. A
+`yt_dlp_webui_download_completed` event is fired on the HA bus with `url`,
+`output_path`, `location`, `media_player`, and `task_id` for use in automations.
 
 **Example Automation:**
 
@@ -154,10 +189,35 @@ trigger:
     event_data:
       action: "DOWNLOAD_VIDEO"
 action:
-  - service: yt_dlp_webui.download
+  - service: yt_dlp_webui.download_audio
     data:
       url: "{{ trigger.event.data.url }}"
-      location: "Default"
+      location: "Music"
+      media_player: "media_player.kitchen_speaker"
+```
+
+**Lovelace card that automates download & play:**
+
+A complete, copy-paste example (helpers, automation, and dashboard card) is in
+[`examples/lovelace_download_and_play.yaml`](examples/lovelace_download_and_play.yaml).
+It shows a URL input, a location picker, and a button that downloads the audio
+and streams it to your media player.
+
+```yaml
+type: vertical-stack
+cards:
+  - type: entities
+    entities:
+      - entity: input_text.yt_dlp_url
+      - entity: input_select.yt_dlp_location
+      - entity: sensor.yt_dlp_last_completed_audio
+  - type: button
+    name: Download & Play
+    tap_action:
+      action: call-service
+      service: automation.trigger
+      data:
+        entity_id: automation.yt_dlp_download_and_play
 ```
 
 ## Security
